@@ -186,6 +186,15 @@ Reproduce with:
 node arena.js --a new --b new --opts-a homeRowValue=0.1 --opts-b homeRowValue=0 --games 400
 ```
 
+Refinement: the bonus applies **only while the opponent still has pawns to
+king** — guarding the back row against a kings-only opponent prevents
+nothing, and an unconditional bonus kept defenders home when they should run
+for coronation. Adopted on that soundness argument plus non-losing evidence:
+vs the unconditional version (`snapshots/after-homerow`) it scored 50.6% /
+50.6% over 400 games/mode at depth 4 and 53.0% / 51.0% over 100/mode at
+depth 5 — positive in all four cells (50.9% ± 2.9 pooled), with the effect
+naturally concentrated in the rare kings-only endgames where it fires.
+
 ## Test coverage summary
 
 - **Rules**: opening position, slides, jumps, forced-jump exclusivity,

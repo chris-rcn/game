@@ -737,16 +737,13 @@ CHF.checkers = function() {
         // A pawn counts 1 + rankWeight * forwardRank (its progress toward
         // kinging) + homeRowBonus if it still guards the back row; folding
         // these into the material ratio keeps them phase-scaled the same way
-        // material itself is.  The back-row bonus prices kinging PREVENTION,
-        // so it applies only while the opponent still has pawns to king —
-        // against a kings-only opponent, staying home is worthless.
+        // material itself is.
         function materialEvalBlack(kingWeight, rankWeight, homeRowBonus) {
             kingWeight = kingWeight || 2;
             rankWeight = rankWeight || 0;
             homeRowBonus = homeRowBonus || 0;
             var black = 0;
             var red = 0;
-            var blackPawns = 0, redPawns = 0, blackHome = 0, redHome = 0;
             var i, loc, fr, checkersColor;
             checkersColor = checkers[BLACK];
             for (i=0; i<checkersColor.length; i++) {
@@ -754,10 +751,8 @@ CHF.checkers = function() {
                 if ((squares[loc] & KING)) {
                     black += kingWeight;
                 } else {
-                    blackPawns++;
                     fr = forwardRank(loc, BLACK);
-                    black += 1 + rankWeight * fr;
-                    if (fr === 0) blackHome++;
+                    black += 1 + rankWeight * fr + (fr === 0 ? homeRowBonus : 0);
                 }
             }
             checkersColor = checkers[RED];
@@ -766,14 +761,10 @@ CHF.checkers = function() {
                 if ((squares[loc] & KING)) {
                     red += kingWeight;
                 } else {
-                    redPawns++;
                     fr = forwardRank(loc, RED);
-                    red += 1 + rankWeight * fr;
-                    if (fr === 0) redHome++;
+                    red += 1 + rankWeight * fr + (fr === 0 ? homeRowBonus : 0);
                 }
             }
-            if (redPawns > 0) black += homeRowBonus * blackHome;
-            if (blackPawns > 0) red += homeRowBonus * redHome;
             return black / (black + red);
         }
 

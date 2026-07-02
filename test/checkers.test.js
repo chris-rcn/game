@@ -328,6 +328,20 @@ test('materialEvalBlack accepts a home-row pawn bonus', function () {
     assert.strictEqual(kings.materialEvalBlack(2, 0, 0.1), kings.materialEvalBlack(2, 0, 0));
 });
 
+test('home-row bonus applies only while the opponent still has pawns to king', function () {
+    // Guarding the back row against a kings-only opponent prevents nothing.
+    var vsKing = h.makeGame({ turn: 'black', pieces: { 64: 'b', 2: 'R' } });
+    assert.strictEqual(vsKing.materialEvalBlack(2, 0, 0.1), vsKing.materialEvalBlack(2, 0, 0));
+    var vsPawn = h.makeGame({ turn: 'black', pieces: { 64: 'b', 20: 'r' } });
+    assert.ok(vsPawn.materialEvalBlack(2, 0, 0.1) > vsPawn.materialEvalBlack(2, 0, 0));
+    // One-sided: red keeps its bonus while black still has pawns, even if
+    // black has lost its own claim.
+    var mixed = h.makeGame({ turn: 'black', pieces: { 64: 'b', 2: 'r', 4: 'R' } });
+    // red home pawn on 2 counts 1.1 (black has a pawn); black home pawn on
+    // 64 counts 1.1 too (red has a pawn on 2).
+    assert.ok(Math.abs(mixed.materialEvalBlack(2, 0, 0.1) - 1.1 / (1.1 + 1.1 + 2)) < 1e-12);
+});
+
 test('forwardRank counts from each side\'s home row', function () {
     var g = new checkers.Game(); // forwardRank is an instance method
     assert.strictEqual(g.forwardRank(2, h.RED), 0);
