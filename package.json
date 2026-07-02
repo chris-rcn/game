@@ -1,0 +1,11 @@
+{
+  "name": "chf-checkers",
+  "version": "1.0.0",
+  "description": "Checkers engine mirrored from chf-checkers.s3-website-us-west-2.amazonaws.com, with a Node test suite and bug report",
+  "main": "checkers.js",
+  "scripts": {
+    "test": "node --test 'test/*.test.js'"
+  },
+  "license": "UNLICENSED",
+  "private": true
+}

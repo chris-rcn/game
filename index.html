@@ -1,0 +1,35 @@
+<!DOCTYPE html>
+<html>
+
+<head lang="en">
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, user-scalable=no">
+    <title>Checkers</title>
+    <script type="text/javascript" src="common.js" ></script>
+    <script type="text/javascript" src="checkers.js" ></script>
+    <script type="text/javascript" src="players.js" ></script>
+    <script type="text/javascript" src="checkersUi.js" ></script>
+</head>
+
+<body onload="CHF.checkers.ui.init(
+    document.getElementById('cnvBoard'),
+    document.getElementById('imgBoard'),
+    document.getElementById('divMessage'),
+    document.getElementById('spanLevel'));
+">
+
+    <div style="width:350px;">
+        <div id="divMessage" style="text-align: center; height:20px;"></div>
+        <input type="checkbox" onclick="CHF.checkers.ui.setForcedJumps(this.checked)" checked>Forced jumps<br /><br />
+        <span id="spanLevel" style="margin-right:5px;"></span>
+        <input type="button" value="Reset level to one" onclick="CHF.checkers.ui.resetLevel()" style="width:32%;"><br /><br />
+        <img id="imgBoard" src="board.jpg" hidden />
+        <canvas id="cnvBoard" width="350" height="350"></canvas>
+        <div style="margin-top:15px; margin-bottom:15px; width:350px;">
+            <input type="button" value="New game" onclick="CHF.checkers.ui.newGame()" style="width:32%;">
+        </div>
+    </div>
+
+</body>
+
+</html>
