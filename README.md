@@ -22,6 +22,9 @@ Added in this repo:
 
 - `test/` — Node test suite (`node:test`, no dependencies)
 - `BUGS.md` — the bugs found, each cross-referenced to a reproducing test
+- `baseline/` — frozen snapshot of the engine as mirrored ("old" version); never edit
+- `arena.js` — plays the root ("new") engine against `baseline/` for many games
+  in both forced-jump modes
 
 ## Running
 
@@ -45,6 +48,39 @@ tablebase files):
 ```sh
 npx http-server . -p 8080   # then open http://localhost:8080/
 ```
+
+## Arena: new vs old
+
+Before fixing anything, `baseline/` was frozen as the "old" version. Bug fixes
+go in the root files, and the arena measures their effect head-to-head:
+
+```sh
+npm run arena                            # new vs baseline, 100 games per mode, depth 4
+node arena.js --games 200 --depth 5      # bigger, deeper
+node arena.js --a new --b new            # self-play sanity check (always ties exactly)
+node arena.js --forced on --verbose      # one mode, per-game lines
+```
+
+How it stays fair and meaningful:
+
+- The two versions load as **independent Node modules**, so module-level state
+  (forced-jump flag, RNGs) cannot leak between them; the chosen mode is set on
+  every copy.
+- Games run in **pairs sharing a seeded random opening with colors swapped**,
+  and players are built fresh per game — identical versions therefore mirror
+  exactly and score exactly 50%, which the test suite asserts.
+- One engine (default: new) is the **referee** owning the authoritative game;
+  each player rebuilds the position in its own engine from `getState()` JSON.
+  A move the referee rejects loses the game for that player.
+- A **shadow game in the other version replays every move** and any rejection,
+  board mismatch, or legal-move-set mismatch is reported as a divergence (and
+  a non-zero exit code) — the alarm for fixes that change the rules.
+- The engine never declares draws (BUGS.md #6), so the arena adjudicates:
+  `--draw-plies` (default 50) plies without a capture or pawn advance, or
+  `--max-plies` (default 300) total, is a draw.
+
+Run `node arena.js --help 2>/dev/null || head -50 arena.js` for the full flag
+list (documented in the header comment).
 
 ## Test coverage summary
 

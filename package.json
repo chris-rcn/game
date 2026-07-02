@@ -4,7 +4,8 @@
   "description": "Checkers engine mirrored from chf-checkers.s3-website-us-west-2.amazonaws.com, with a Node test suite and bug report",
   "main": "checkers.js",
   "scripts": {
-    "test": "node --test 'test/*.test.js'"
+    "test": "node --test 'test/*.test.js'",
+    "arena": "node arena.js"
   },
   "license": "UNLICENSED",
   "private": true

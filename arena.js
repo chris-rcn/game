@@ -1,0 +1,378 @@
+"use strict";
+// arena.js — play the root ("new") engine against the frozen baseline/ ("old")
+// engine for many games, in both forced-jump modes.
+//
+// Design notes:
+// - The two versions are loaded as independent Node modules (root vs
+//   baseline/), so their module-level state (jumpsAreForced, seeded RNGs)
+//   never interacts. The chosen forced-jump mode is set on every loaded copy.
+// - One engine acts as REFEREE and owns the authoritative game. Each player
+//   rebuilds the position inside its OWN engine version from the referee's
+//   getState() JSON, searches there, and returns a plain {from, to} move,
+//   which the referee applies with the checked makeMove. A move the referee
+//   rejects loses the game for that player ("illegal-move"). This keeps the
+//   match meaningful even if a fix changes the rules: the referee's rules
+//   govern, and rule disagreements are surfaced rather than hidden.
+// - Divergence detection: unless disabled, a shadow game in the OTHER engine
+//   version replays every move; any rejection, board mismatch, or legal-move-
+//   set mismatch is recorded per ply. With rules-identical versions this must
+//   stay at zero — it is the regression alarm for rules-affecting fixes.
+// - Fairness: games are played in pairs sharing one seeded random opening,
+//   with colors swapped. Players are constructed fresh per game, so a
+//   self-play match (identical versions) mirrors exactly and scores 50%.
+// - Draws: the engine itself never declares a draw (BUGS.md #6), so the arena
+//   adjudicates: no capture/pawn-advance for --draw-plies plies, or --max-plies
+//   total, is a draw.
+//
+// Usage:
+//   node arena.js                          # new vs baseline, both modes
+//   node arena.js --games 200 --depth 5
+//   node arena.js --a new --b new          # self-play sanity check
+//   node arena.js --forced on --verbose
+//
+// Options (defaults in brackets):
+//   --games N          games per forced mode, rounded up to even [100]
+//   --a, --b WHICH     'new' (root) or 'baseline' [a=new, b=baseline]
+//   --depth N          search depth for both sides [4]
+//   --depth-a/-b N     per-side override
+//   --random-a/-b      use the random player instead of search
+//   --forced MODE      'both', 'on', or 'off' [both]
+//   --seed N           opening-generator seed [1]
+//   --opening-plies N  random opening plies shared by each game pair [6]
+//   --draw-plies N     plies without progress adjudicated as a draw [50]
+//   --max-plies N      hard game-length cap, adjudicated as a draw [300]
+//   --referee WHICH    'new' or 'baseline' rules govern [new]
+//   --no-verify        skip shadow-replay divergence detection
+//   --verbose          per-game result lines
+
+var path = require('path');
+
+var BLACK = 1;
+var RED = 2;
+
+var engineCache = {};
+function loadEngine(which) {
+    if (which !== 'new' && which !== 'baseline') {
+        throw new Error("engine must be 'new' or 'baseline', got: " + which);
+    }
+    if (!engineCache[which]) {
+        var dir = which === 'baseline' ? path.join(__dirname, 'baseline') : __dirname;
+        engineCache[which] = {
+            name: which,
+            common: require(path.join(dir, 'common.js')),
+            checkers: require(path.join(dir, 'checkers.js')),
+            players: require(path.join(dir, 'players.js'))
+        };
+    }
+    return engineCache[which];
+}
+
+function deepCopy(obj) {
+    return JSON.parse(JSON.stringify(obj));
+}
+
+function moveKeySet(game) {
+    return game.getMoves().map(function (m) { return m.from + '>' + m.to; }).sort().join(',');
+}
+
+// spec: {engine: 'new'|'baseline', type: 'search'|'random', depth, seed}
+function makePlayer(spec) {
+    var engine = loadEngine(spec.engine);
+    var label = spec.engine + (spec.type === 'random' ? ':random' : ':d' + spec.depth);
+    var inner = spec.type === 'random'
+        ? new engine.players.Random(spec.seed || 1)
+        : new engine.players.Search(spec.depth);
+    return {
+        label: label,
+        engine: engine,
+        genMove: function (state) {
+            var game = new engine.checkers.Game(deepCopy(state));
+            return inner.genMove(game);
+        }
+    };
+}
+
+// Generate `plies` random opening moves (as plain {from,to}) that leave a
+// live position, using the referee's rules.
+function genOpening(referee, rand, plies) {
+    for (;;) {
+        var game = new referee.checkers.Game();
+        var moves = [];
+        var ok = true;
+        for (var i = 0; i < plies; i++) {
+            var legal = game.getMoves();
+            if (legal.length === 0) { ok = false; break; }
+            var m = legal[rand.int(legal.length)];
+            moves.push({ from: m.from, to: m.to });
+            game.makeMove(m, true);
+        }
+        if (ok && game.getMoves().length > 0) {
+            return moves;
+        }
+    }
+}
+
+// players: {1: player, 2: player} by color. Returns
+// {winner: 1|2|0, reason, plies, divergences: [{ply, kind, ...}]}
+function playGame(referee, players, opening, opts) {
+    var game = new referee.checkers.Game();
+    var shadow = opts.shadowEngine ? new opts.shadowEngine.checkers.Game() : null;
+    var divergences = [];
+
+    function applyShadow(move, ply) {
+        if (!shadow || divergences.length) return; // stop after first divergence
+        var ok = shadow.makeMove(new opts.shadowEngine.checkers.Move(move.from, move.to));
+        if (!ok) {
+            divergences.push({ ply: ply, kind: 'shadow-rejected-move', move: move });
+            return;
+        }
+        if (shadow.toCompactString() !== game.toCompactString() ||
+            shadow.getJumpContinuationLoc() !== game.getJumpContinuationLoc()) {
+            divergences.push({ ply: ply, kind: 'state-mismatch' });
+            return;
+        }
+        var refereeMoves = moveKeySet(game);
+        var shadowMoves = moveKeySet(shadow);
+        if (refereeMoves !== shadowMoves) {
+            divergences.push({ ply: ply, kind: 'legal-move-set-mismatch',
+                referee: refereeMoves, shadow: shadowMoves });
+        }
+    }
+
+    var ply = 0;
+    opening.forEach(function (om) {
+        if (!game.makeMove(new referee.checkers.Move(om.from, om.to))) {
+            throw new Error("opening move rejected by referee: " + om.from + ">" + om.to);
+        }
+        applyShadow(om, ply);
+        ply++;
+    });
+
+    for (;;) {
+        if (game.getMoves().length === 0) {
+            var loser = game.turnIsBlack() ? BLACK : RED;
+            return { winner: 3 - loser, reason: 'no-moves', plies: ply, divergences: divergences };
+        }
+        if (game.getMovesSinceProgress() >= opts.drawPlies) {
+            return { winner: 0, reason: 'draw-no-progress', plies: ply, divergences: divergences };
+        }
+        if (ply >= opts.maxPlies) {
+            return { winner: 0, reason: 'draw-max-plies', plies: ply, divergences: divergences };
+        }
+        var color = game.turnIsBlack() ? BLACK : RED;
+        var move = players[color].genMove(game.getState());
+        if (!move) {
+            return { winner: 3 - color, reason: 'no-move-returned', plies: ply, divergences: divergences };
+        }
+        if (!game.makeMove(new referee.checkers.Move(move.from, move.to))) {
+            return { winner: 3 - color, reason: 'illegal-move', plies: ply,
+                divergences: divergences, illegalMove: { by: players[color].label, move: move } };
+        }
+        applyShadow(move, ply);
+        ply++;
+    }
+}
+
+function eloDiff(score) {
+    if (score <= 0) return -Infinity;
+    if (score >= 1) return Infinity;
+    return 400 * Math.log10(score / (1 - score));
+}
+
+// Play one forced-jump mode. Returns a stats object.
+function playMode(forced, opts) {
+    var referee = loadEngine(opts.referee);
+    // The chosen mode must be set on every loaded engine copy.
+    var involved = {};
+    [opts.referee, opts.a.engine, opts.b.engine].forEach(function (w) { involved[w] = true; });
+    Object.keys(involved).forEach(function (w) {
+        loadEngine(w).checkers.setForcedJumps(forced);
+    });
+    var shadowName = opts.referee === 'new' ? 'baseline' : 'new';
+    var shadowEngine = null;
+    if (opts.verify) {
+        loadEngine(shadowName).checkers.setForcedJumps(forced);
+        shadowEngine = loadEngine(shadowName);
+    }
+
+    var rand = new referee.common.Random(opts.seed + (forced ? 0 : 1000000));
+    var stats = {
+        forced: forced, games: 0, aWins: 0, bWins: 0, draws: 0,
+        aWinsAsBlack: 0, aWinsAsRed: 0, bWinsAsBlack: 0, bWinsAsRed: 0,
+        reasons: {}, divergences: [], totalPlies: 0
+    };
+    var pairs = Math.ceil(opts.games / 2);
+    for (var p = 0; p < pairs; p++) {
+        var opening = genOpening(referee, rand, opts.openingPlies);
+        for (var g = 0; g < 2; g++) {
+            var aIsBlack = (g === 0);
+            // Fresh players each game so paired games are exact mirrors when
+            // the versions are identical.
+            var players = {};
+            players[BLACK] = makePlayer(aIsBlack ? opts.a : opts.b);
+            players[RED] = makePlayer(aIsBlack ? opts.b : opts.a);
+            var result = playGame(referee, players, opening, {
+                drawPlies: opts.drawPlies, maxPlies: opts.maxPlies, shadowEngine: shadowEngine
+            });
+            stats.games++;
+            stats.totalPlies += result.plies;
+            stats.reasons[result.reason] = (stats.reasons[result.reason] || 0) + 1;
+            result.divergences.forEach(function (d) {
+                d.game = stats.games;
+                stats.divergences.push(d);
+            });
+            var aWon = result.winner === (aIsBlack ? BLACK : RED);
+            var bWon = result.winner === (aIsBlack ? RED : BLACK);
+            if (aWon) {
+                stats.aWins++;
+                if (aIsBlack) stats.aWinsAsBlack++; else stats.aWinsAsRed++;
+            } else if (bWon) {
+                stats.bWins++;
+                if (aIsBlack) stats.bWinsAsRed++; else stats.bWinsAsBlack++;
+            } else {
+                stats.draws++;
+            }
+            if (opts.verbose) {
+                console.log("  game " + stats.games + ": " +
+                    (result.winner === 0 ? "draw" : (aWon ? "A" : "B") + " wins") +
+                    " (" + result.reason + ", " + result.plies + " plies," +
+                    " A as " + (aIsBlack ? "black" : "red") + ")");
+            }
+        }
+    }
+    return stats;
+}
+
+function summarize(stats, opts) {
+    var n = stats.games;
+    var score = (stats.aWins + 0.5 * stats.draws) / n;
+    var se = Math.sqrt(score * (1 - score) / n);
+    var lines = [];
+    lines.push("=== Forced jumps: " + stats.forced + " ===");
+    lines.push("A=" + opts.a.engine + (opts.a.type === 'random' ? ":random" : ":d" + opts.a.depth) +
+        "  B=" + opts.b.engine + (opts.b.type === 'random' ? ":random" : ":d" + opts.b.depth) +
+        "  referee=" + opts.referee + "  games=" + n);
+    lines.push("A wins " + stats.aWins + " (black " + stats.aWinsAsBlack + ", red " + stats.aWinsAsRed + ")" +
+        "  B wins " + stats.bWins + " (black " + stats.bWinsAsBlack + ", red " + stats.bWinsAsRed + ")" +
+        "  draws " + stats.draws);
+    lines.push("A score " + (100 * score).toFixed(1) + "% ± " + (196 * se).toFixed(1) +
+        "%  (Elo " + (isFinite(eloDiff(score)) ? (eloDiff(score) >= 0 ? "+" : "") + eloDiff(score).toFixed(0) : "∞") +
+        ")  avg length " + (stats.totalPlies / n).toFixed(1) + " plies");
+    lines.push("end reasons: " + Object.keys(stats.reasons).map(function (r) {
+        return r + " " + stats.reasons[r];
+    }).join(", "));
+    if (opts.verify) {
+        lines.push("divergences: " + stats.divergences.length +
+            (stats.divergences.length ? "  FIRST: " + JSON.stringify(stats.divergences[0]) : ""));
+    }
+    return lines.join("\n");
+}
+
+function playMatch(opts) {
+    opts = normalizeOptions(opts);
+    var results = [];
+    opts.forcedModes.forEach(function (forced) {
+        results.push(playMode(forced, opts));
+    });
+    // Leave every engine copy back at the default.
+    ['new', 'baseline'].forEach(function (w) {
+        try { loadEngine(w).checkers.setForcedJumps(true); } catch (e) { /* baseline may be absent */ }
+    });
+    return { options: opts, results: results };
+}
+
+function normalizeOptions(o) {
+    o = o || {};
+    var opts = {
+        games: o.games || 100,
+        a: o.a || { engine: 'new', type: 'search', depth: o.depth || 4 },
+        b: o.b || { engine: 'baseline', type: 'search', depth: o.depth || 4 },
+        forcedModes: o.forcedModes || [true, false],
+        seed: o.seed == null ? 1 : o.seed,
+        openingPlies: o.openingPlies == null ? 6 : o.openingPlies,
+        drawPlies: o.drawPlies || 50,
+        maxPlies: o.maxPlies || 300,
+        referee: o.referee || 'new',
+        verify: o.verify,
+        verbose: !!o.verbose
+    };
+    if (opts.games % 2 === 1) opts.games++;
+    if (opts.verify == null) {
+        opts.verify = opts.a.engine !== opts.b.engine || opts.referee !== opts.a.engine;
+    }
+    return opts;
+}
+
+function parseArgs(argv) {
+    var o = { a: {}, b: {} };
+    var flags = {};
+    for (var i = 0; i < argv.length; i++) {
+        var arg = argv[i];
+        if (arg.slice(0, 2) !== '--') throw new Error("unexpected argument: " + arg);
+        var key = arg.slice(2);
+        var boolFlags = ['random-a', 'random-b', 'no-verify', 'verbose'];
+        if (boolFlags.indexOf(key) >= 0) {
+            flags[key] = true;
+        } else {
+            flags[key] = argv[++i];
+            if (flags[key] == null) throw new Error("missing value for --" + key);
+        }
+    }
+    var depth = parseInt(flags['depth'] || '4', 10);
+    o.games = parseInt(flags['games'] || '100', 10);
+    o.a = {
+        engine: flags['a'] || 'new',
+        type: flags['random-a'] ? 'random' : 'search',
+        depth: parseInt(flags['depth-a'] || depth, 10),
+        seed: 101
+    };
+    o.b = {
+        engine: flags['b'] || 'baseline',
+        type: flags['random-b'] ? 'random' : 'search',
+        depth: parseInt(flags['depth-b'] || depth, 10),
+        seed: 202
+    };
+    var forced = flags['forced'] || 'both';
+    o.forcedModes = forced === 'both' ? [true, false] :
+        forced === 'on' ? [true] :
+        forced === 'off' ? [false] : (function () { throw new Error("--forced must be both|on|off"); })();
+    if (flags['seed'] != null) o.seed = parseInt(flags['seed'], 10);
+    if (flags['opening-plies'] != null) o.openingPlies = parseInt(flags['opening-plies'], 10);
+    if (flags['draw-plies'] != null) o.drawPlies = parseInt(flags['draw-plies'], 10);
+    if (flags['max-plies'] != null) o.maxPlies = parseInt(flags['max-plies'], 10);
+    o.referee = flags['referee'] || 'new';
+    if (flags['no-verify']) o.verify = false;
+    o.verbose = !!flags['verbose'];
+    return o;
+}
+
+if (require.main === module) {
+    var opts;
+    try {
+        opts = parseArgs(process.argv.slice(2));
+    } catch (e) {
+        console.error(e.message);
+        process.exit(2);
+    }
+    var match = playMatch(opts);
+    match.results.forEach(function (stats) {
+        console.log(summarize(stats, match.options));
+        console.log("");
+    });
+    var totalDivergences = match.results.reduce(function (sum, s) { return sum + s.divergences.length; }, 0);
+    if (totalDivergences > 0) {
+        console.log("WARNING: " + totalDivergences + " rules divergence(s) between engine versions — see above.");
+        process.exitCode = 1;
+    }
+}
+
+module.exports = {
+    loadEngine: loadEngine,
+    makePlayer: makePlayer,
+    genOpening: genOpening,
+    playGame: playGame,
+    playMatch: playMatch,
+    summarize: summarize,
+    BLACK: BLACK,
+    RED: RED
+};
