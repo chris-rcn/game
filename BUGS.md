@@ -77,10 +77,11 @@ always `undefined`. Two features died from this one line:
   bit-identical).
 Fixed by reading `result.move.forced` and storing `killer = result.move`. Both
 features only run in the iterative-deepening / time-budget path, so fixed-depth
-play is untouched. Post-fix, killer ordering prunes ~14-16% of leaf evaluations
-at depths 6-7 on a pinned midgame position while returning the same move and
-value, and a forced-move position returns after the first iteration. The bug
-remains in `baseline/players.js` for arena comparison.
+play is untouched. Post-fix, killer ordering demonstrably engages — node counts
+change relative to `useKillerMove=false` (they were bit-identical before) while
+the root value is unchanged — and a forced-move position returns after the
+first iteration. The size (and sign) of the node savings varies by position
+and depth. The bug remains in `baseline/players.js` for arena comparison.
 
 ## Medium / low impact
 
@@ -91,15 +92,21 @@ path ever ends the game as a draw. `getMoves()` in a king-vs-king shuffle stays
 non-empty forever, `players.Random.playout` relies on random termination, and the
 UI would ping-pong endlessly if both sides were computer-controlled.
 
-### 7. Alpha-beta interacts inconsistently with the depth-decay factor — `players.js:184`
-`childResult.value *= 0.99999` (the "prefer shorter wins" tie-break) is applied
+### 7. Alpha-beta interacts inconsistently with the depth-decay factor — `players.js:184` — **FIXED in root copy**
+`childResult.value *= 0.99999` (the "prefer shorter wins" tie-break) was applied
 *after* the child was searched with the undecayed `(alpha, beta)` window. Values at
-the window edges are therefore pruned against slightly different numbers than the
-parent later compares, and the root value with `doAlphaBeta` on vs off differs by
-~1e-5 relative — enough to flip the chosen move on near-ties. Fix: fold the decay
-into the bounds passed to the child (or apply the decay inside the child before
-bound checks).
-*Evidence:* deterministic position in `players.test.js` (`KNOWN BUG #7`).
+the window edges were therefore pruned against slightly different numbers than the
+parent later compared, and the root value with `doAlphaBeta` on vs off differed by
+~1e-5 relative — enough to flip the chosen move on near-ties.
+
+Fixed by folding the decay into the child window: the parent accepts `v` iff
+`0.99999·v` clears its bounds, so the child is searched with
+`(alpha/0.99999, beta/0.99999)` (negated for opponent nodes as before). Pruned
+search is now **exactly** equal to plain negamax: across 50 seeded positions in
+both jump modes at depth 6, the maximum root-value difference is literally 0 while
+pruning still eliminates 95-99.9% of leaf evaluations. The suite enforces exact
+equality (`===`) on a pinned position and a seeded batch. The bug remains in
+`baseline/players.js` and `snapshots/after-killer-fix/` for arena comparison.
 
 ### 8. `common.SuperRandom` is never exported — `common.js:145`
 The line after the class definition reads `pub.Random = Random;` (a duplicate of

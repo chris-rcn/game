@@ -70,10 +70,6 @@ CHF.checkers.players = function() {
         var random = new common.Random(1);
         var pub = this;
         var currentMaxDepth;
-        // Child values are scaled by this so depth breaks ties toward shorter
-        // paths; child windows must be pre-divided by it so the child prunes
-        // against the same thresholds the parent compares after scaling.
-        var valueDecay = 0.99999;
         pub.logDepth = -1;
         pub.maxDepth = initialMaxDepth;
         pub.tablebase = null;
@@ -206,13 +202,13 @@ CHF.checkers.players = function() {
                 //logIndented(depth, fmt("{} to {}...", move.from, move.to));
                 var childResult;
                 if (game.turnIsBlack() === initialTurnIsBlack) {
-                    childResult = negamax(game, depth+1, alpha/valueDecay, beta/valueDecay, color);
+                    childResult = negamax(game, depth+1, alpha, beta, color);
                 } else {
-                    childResult = negamax(game, depth+1, -beta/valueDecay, -alpha/valueDecay, -color);
+                    childResult = negamax(game, depth+1, -beta, -alpha, -color);
                     childResult.value *= -1;
                 }
                 undo();
-                childResult.value *= valueDecay; // causes depth to be a factor when value is otherwise equal.
+                childResult.value *= 0.99999; // causes depth to be a factor when value is otherwise equal.
                 //logIndented(depth, fmt("{} to {} has eval {}", move.from, move.to, round(childResult.value, 2)));
                 assert(childResult.value >= 0 || childResult.value <= 0, "childResult.value=" + childResult.value);
                 if (childResult.value > result.value) {

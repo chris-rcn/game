@@ -17,3 +17,4 @@ node arena.js --b snapshots/<name> ...
 | Snapshot | Taken from | Contains |
 |---|---|---|
 | `after-tt-fix` | commit `12651a0` | quiescence fix (#11) + transposition-table fix (#4); pre killer-move fix (#5) |
+| `after-killer-fix` | commit `277f66a` | above + killer/forced-move fix (#5); pre alpha-beta/decay fix (#7) |
