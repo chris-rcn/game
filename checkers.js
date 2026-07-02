@@ -730,26 +730,29 @@ CHF.checkers = function() {
             return (color & RED) ? rank(loc) : boardSizeM1-rank(loc);
         }
         pub.forwardRank = forwardRank;
-        function materialEval(kingWeight, rankWeight) {
+        function materialEval(kingWeight, rankWeight, homeRowBonus) {
             var polarity = turn === BLACK ? 1 : -1;
-            return polarity * (2 * materialEvalBlack(kingWeight, rankWeight) - 1);
+            return polarity * (2 * materialEvalBlack(kingWeight, rankWeight, homeRowBonus) - 1);
         }
         // A pawn counts 1 + rankWeight * forwardRank (its progress toward
-        // kinging) material units; folding advancement into the material
-        // ratio keeps it phase-scaled the same way material itself is.
-        function materialEvalBlack(kingWeight, rankWeight) {
+        // kinging) + homeRowBonus if it still guards the back row; folding
+        // these into the material ratio keeps them phase-scaled the same way
+        // material itself is.
+        function materialEvalBlack(kingWeight, rankWeight, homeRowBonus) {
             kingWeight = kingWeight || 2;
             rankWeight = rankWeight || 0;
+            homeRowBonus = homeRowBonus || 0;
             var black = 0;
             var red = 0;
-            var i, loc, checkersColor;
+            var i, loc, fr, checkersColor;
             checkersColor = checkers[BLACK];
             for (i=0; i<checkersColor.length; i++) {
                 loc = checkersColor[i];
                 if ((squares[loc] & KING)) {
                     black += kingWeight;
                 } else {
-                    black += 1 + rankWeight * forwardRank(loc, BLACK);
+                    fr = forwardRank(loc, BLACK);
+                    black += 1 + rankWeight * fr + (fr === 0 ? homeRowBonus : 0);
                 }
             }
             checkersColor = checkers[RED];
@@ -758,7 +761,8 @@ CHF.checkers = function() {
                 if ((squares[loc] & KING)) {
                     red += kingWeight;
                 } else {
-                    red += 1 + rankWeight * forwardRank(loc, RED);
+                    fr = forwardRank(loc, RED);
+                    red += 1 + rankWeight * fr + (fr === 0 ? homeRowBonus : 0);
                 }
             }
             return black / (black + red);

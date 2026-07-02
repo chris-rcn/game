@@ -29,6 +29,9 @@ test('Search defaults to the learned king value of 1.4', function () {
     // candidate (0.005-0.04/rank) scored at or below 50% against 0 at depths
     // 4 and 5 (see README). It stays parameterized for future re-testing.
     assert.strictEqual(s.rankValue, 0);
+    // Back-row bonus was tested and ADOPTED: 59.4% ± 3.4 vs 0 over 800
+    // depth-4 games, positive at depth 5, jointly stable with kingValue=1.4.
+    assert.strictEqual(s.homeRowValue, 0.1);
 });
 
 test('Random player: genMove returns a legal move, deterministically per seed', function () {
@@ -168,7 +171,10 @@ test('killer-move ordering engages under iterative deepening (BUG #5, fixed)', f
     }
     var withKiller = run(true);
     var withoutKiller = run(false);
-    assert.ok(withKiller.value === withoutKiller.value,
+    // Tolerance is FP-noise scale: decay*(x/decay) is not bit-exact, so
+    // reordering can shift results by an ULP (~1e-16); the pre-fix bug scale
+    // was 1e-5.
+    assert.ok(Math.abs(withKiller.value - withoutKiller.value) < 1e-9,
         "ordering must not change the result: " + withKiller.value + " vs " + withoutKiller.value);
     assert.notStrictEqual(withKiller.evals, withoutKiller.evals,
         "killer ordering must engage and change the node count (both " + withKiller.evals + ")");
@@ -227,12 +233,15 @@ test('alpha-beta returns exactly the plain-negamax root value (BUG #7, fixed)', 
     // The depth-decay factor is now folded into the child window
     // (alpha/valueDecay, beta/valueDecay), so the child prunes against the
     // same thresholds the parent compares after scaling — pruning can no
-    // longer perturb the root value, even at the 1e-5 tie-break scale.
+    // longer perturb the root value at the 1e-5 tie-break scale. Agreement
+    // is exact up to FP rounding: decay*(x/decay) can shift a boundary by an
+    // ULP (~1e-16), so the tolerance sits between the two scales (and move
+    // identity is not asserted — an ULP tie can legitimately flip it).
     var g = h.fromCompact('rrrrrrrrr.r...r..b..bbrbb.bbbbbb', 'b');
     var on = newSearch(6).genMoveDetail(g.copy());
     var off = newSearch(6, { ab: false }).genMoveDetail(g.copy());
-    assert.strictEqual(on.value, off.value);
-    assert.strictEqual(on.move.from + '>' + on.move.to, off.move.from + '>' + off.move.to);
+    assert.ok(Math.abs(on.value - off.value) < 1e-9,
+        "alpha-beta on=" + on.value + " vs off=" + off.value);
 });
 
 test('alpha-beta equals plain negamax across seeded positions and still prunes (BUG #7, fixed)', function () {
@@ -260,9 +269,9 @@ test('alpha-beta equals plain negamax across seeded positions and still prunes (
             evalsOn += sOn.evalCounter;
             evalsOff += sOff.evalCounter;
             if (on.value !== undefined && off.value !== undefined) {
-                // === rather than strictEqual: a zero value may surface as -0
-                // on one side (sign flips at opponent nodes), which is equal.
-                assert.ok(on.value === off.value,
+                // FP-noise tolerance (see the pinned-position test above);
+                // the pre-fix bug scale was 1e-5.
+                assert.ok(Math.abs(on.value - off.value) < 1e-9,
                     "forced=" + forced + " position " + tested + ": " + on.value + " vs " + off.value);
             }
         }

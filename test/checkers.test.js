@@ -316,6 +316,18 @@ test('materialEvalBlack accepts a per-rank pawn advancement weight', function ()
     assert.strictEqual(kings.materialEvalBlack(2, 0.1), kings.materialEvalBlack(2, 0));
 });
 
+test('materialEvalBlack accepts a home-row pawn bonus', function () {
+    // Black pawn on 64 guards black's back row (forward rank 0); black pawn
+    // on 40 (rank 3) and red pawn on 20 (rank 2) do not guard theirs.
+    var g = h.makeGame({ turn: 'black', pieces: { 64: 'b', 40: 'b', 20: 'r' } });
+    // black = (1 + 0.1) + 1 = 2.1, red = 1
+    assert.ok(Math.abs(g.materialEvalBlack(2, 0, 0.1) - 2.1 / 3.1) < 1e-12);
+    assert.strictEqual(g.materialEvalBlack(2, 0, 0), g.materialEvalBlack(2));
+    // Kings on the back row get no bonus.
+    var kings = h.makeGame({ turn: 'black', pieces: { 64: 'B', 2: 'R' } });
+    assert.strictEqual(kings.materialEvalBlack(2, 0, 0.1), kings.materialEvalBlack(2, 0, 0));
+});
+
 test('forwardRank counts from each side\'s home row', function () {
     var g = new checkers.Game(); // forwardRank is an instance method
     assert.strictEqual(g.forwardRank(2, h.RED), 0);

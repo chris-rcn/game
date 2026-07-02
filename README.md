@@ -164,6 +164,28 @@ within its horizon — so a blanket advancement gradient pushes pawns into
 danger without buying anything. The knob stays (default 0, exactly the old
 eval) in case a future, deeper-search retest disagrees.
 
+### Adopted: back-row pawn bonus (`Search.homeRowValue = 0.1`)
+
+The mirror image of the rejected advancement bonus — a pawn still guarding
+its back row counts `1 + 0.1` material units, pricing kinging *prevention*,
+which the eval otherwise cannot see beyond the search horizon. Every
+candidate won its scan (depth 4, 120/mode, forced/unforced):
+
+| bonus | score | bonus | score |
+|---|---|---|---|
+| 0.05 | 57.5% / 59.6% | 0.2 | 54.2% / 59.2% |
+| **0.1** | **63.3% / 60.0%** | 0.4 | 57.5% / 63.3% |
+
+Confirmations of 0.1: 400 fast games/mode at depth 4 → 59.1% / 59.8%
+(59.4% ± 3.4 pooled); 100 slow games/mode at depth 5 → 55.0% / 51.5%.
+Joint stability: with the bonus active, kingValue 1.2 and 1.6 both fail to
+beat 1.4 (≈50%), so the adopted pair is (kingValue 1.4, homeRowValue 0.1).
+Reproduce with:
+
+```sh
+node arena.js --a new --b new --opts-a homeRowValue=0.1 --opts-b homeRowValue=0 --games 400
+```
+
 ## Test coverage summary
 
 - **Rules**: opening position, slides, jumps, forced-jump exclusivity,

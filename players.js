@@ -78,8 +78,13 @@ CHF.checkers.players = function() {
         // ballpark — scored 53.7% ± 3.1 against 2.0 over 1000 games.
         pub.kingValue = 1.4;
         pub.rankValue = 0; // per-rank pawn advancement, in pawn units
+        // Extra worth of a pawn still guarding the back row.  Learned by
+        // arena self-play vs 0 (all candidates 0.05-0.4 won; 0.1 peaked):
+        // 59.4% ± 3.4 over 800 games at depth 4, 53.3% at depth 5, with
+        // kingValue=1.4 re-verified as stable alongside it.
+        pub.homeRowValue = 0.1;
         pub.evalFunction = function(game) {
-            return game.materialEval(pub.kingValue, pub.rankValue);
+            return game.materialEval(pub.kingValue, pub.rankValue, pub.homeRowValue);
         };
         pub.evalDither = 0.001;
         pub.doQuiesce = true;
