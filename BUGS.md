@@ -45,17 +45,25 @@ so switching off "Forced jumps" silently plays without its endgame tablebase.
 gap: `loadTablebase` in `checkersUi.js` never checks `request.status`, so an HTTP
 error page would be fed to `ResultList2` the same way.
 
-### 4. `players.Search` transposition table reuses under-searched entries — `players.js:101`
-`ttEntry.d` stores the node's **distance from the root**, and the reuse condition is
+### 4. `players.Search` transposition table reuses under-searched entries — `players.js:101` — **FIXED in root copy**
+`ttEntry.d` stored the node's **distance from the root**, and the reuse condition was
 `ttEntry.d >= depth`. Larger distance-from-root means *less* remaining search depth,
-so the condition is inverted: it accepts cached values computed with **shallower**
+so the condition was inverted: it accepted cached values computed with **shallower**
 lookahead than the current node needs, while rejecting deeper ones. Search results
-become visit-order dependent. Fix: store the remaining depth
-(`currentMaxDepth - depth`) and require `storedRemaining >= neededRemaining`.
-Mitigating factor: `useTranspositionTable` defaults to `false`, so the shipped UI is
-unaffected.
-*Evidence:* deterministic midgame position (see `players.test.js`) where the root
-value differs with the TT on vs off.
+were visit-order dependent, and TT-enabled play was observably passive (an early
+arena run at depth 3 with TT + iterative deepening drew all 10 games).
+
+Fixed by storing the **remaining** depth (`currentMaxDepth - depth`, clamped at 0
+since every node at or beyond `currentMaxDepth` is in the same depth-independent
+quiescence regime) and reusing only when `stored remaining >= needed remaining`.
+Residual note: TT-on can still differ from TT-off by ~1e-5 — reusing an entry that
+was searched *deeper* than needed is legitimate but carries different depth-decay
+tie-break noise (see #7). The old bug produced errors thousands of times larger:
+on a pinned depth-9 position, pre-fix TT shifted the root value 0.2307 → 0.2000,
+while post-fix TT agrees with plain search exactly and evaluates ~45% fewer leaves.
+Mitigating factor for the original site: `useTranspositionTable` defaults to
+`false`, so the shipped UI never hit this. The bug remains in
+`baseline/players.js` for arena comparison.
 
 ### 5. `genMoveDetail` checks `.forced` on the wrong object — `players.js:238`
 `negamax` flags the *Move* (`moves[0].forced = true; result.move = moves[0]`), but

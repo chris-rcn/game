@@ -100,13 +100,20 @@ CHF.checkers.players = function() {
             var alphaOrig = alpha;
             var result = {};
             var hash = game.hashBase();
+            // Entries are keyed on remaining search depth below the node, not
+            // distance from the root: a cached value is reusable only if it
+            // was searched at least as deep as this node needs.  Nodes at or
+            // beyond currentMaxDepth are all in the same quiescence regime,
+            // whose result does not depend on depth, so their remaining depth
+            // is equivalently 0.
+            var remaining = Math.max(0, currentMaxDepth - depth);
             if (pub.useTranspositionTable) {
                 var ttEntry = transpositionTable[hash.h0];
-                if (ttEntry && ttEntry.h1 === hash.h1 && ttEntry.d >= depth) {
+                if (ttEntry && ttEntry.h1 === hash.h1 && ttEntry.r >= remaining) {
                     if (ttEntry.f === TT_EXACT) {
                         result.value = ttEntry.v;
                         result.valueIsKnown = false;
-                        result.distanceFromRoot = ttEntry.d;
+                        result.distanceFromRoot = depth;
                         return result;
                     } else if (ttEntry.f === TT_LOWERBOUND) {
                         alpha = Math.max(alpha, ttEntry.v);
@@ -116,7 +123,7 @@ CHF.checkers.players = function() {
                     if (alpha >= beta) {
                         result.value = ttEntry.v;
                         result.valueIsKnown = false;
-                        result.distanceFromRoot = ttEntry.d;
+                        result.distanceFromRoot = depth;
                         return result;
                     }
                 }
@@ -238,7 +245,7 @@ CHF.checkers.players = function() {
                 } else {
                     ttEntry.f = TT_EXACT;
                 }
-                ttEntry.d = depth;
+                ttEntry.r = remaining;
                 transpositionTable[hash.h0] = ttEntry;
                 ttSize++;
             }

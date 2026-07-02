@@ -144,22 +144,54 @@ test('KNOWN BUG #5: forced-move flag is checked on the wrong object, so the kill
             "genMoveDetail checks `move.forced` on the result wrapper; it is undefined");
     });
 
-test('KNOWN BUG #6: transposition table changes search results (depth comparison is inverted)',
-    { todo: 'ttEntry.d stores distance-from-root, and the reuse condition `ttEntry.d >= depth` ' +
-            'therefore accepts entries that were searched to LESS remaining depth than the ' +
-            'current node needs. Root values differ between TT on and TT off on the same ' +
-            'position. (useTranspositionTable defaults to false, so the shipped UI is unaffected.)' },
-    function () {
-        // Midgame position captured from seeded self-play; reconstructing from the
-        // full state JSON preserves internal piece-list order, which move
-        // generation (and therefore this repro) depends on.
-        var state = JSON.parse('{"turn":2,"jumpContinuationLoc":0,"squares":[null,null,8,null,8,null,2,null,2,null,8,null,8,null,8,null,2,null,null,null,8,null,8,null,8,null,1,null,1,null,5,null,8,null,2,null,null,null,8,null,8,null,8,null,8,null,8,null,8,null,8,null,8,null,null,null,1,null,8,null,1,null,1,null,1,null,1,null,1,null,1],"movesSinceProgress":0,"legalMoves":null,"checkers":[null,[30,70,68,26,56,28,60,62,64,66],[16,34,6,8]]}');
-        var g = new checkers.Game(state);
-        var off = newSearch(8).genMoveDetail(g.copy());
-        var on = newSearch(8, { tt: true }).genMoveDetail(g.copy());
-        assert.ok(Math.abs(off.value - on.value) < 1e-9,
-            "TT off=" + off.value + " vs TT on=" + on.value);
-    });
+// The transposition table (BUGS.md #4, fixed) can legitimately shift root
+// values by ~1e-5: an entry searched DEEPER than the current node needs is
+// valid to reuse but carries different depth-decay tie-break noise. The old
+// bug (reusing SHALLOWER entries) produced errors thousands of times larger.
+var TT_DECAY_TOLERANCE = 1e-4;
+
+test('transposition table agrees with plain search where the old code was materially wrong (BUG #4, fixed)', function () {
+    // Forced-jump midgame position (state JSON preserves piece-list order,
+    // which move generation depends on). At depth 9 the pre-fix code returned
+    // 0.2000 with TT on vs 0.2307 with TT off — a real evaluation error, not
+    // tie-break noise.
+    var state = JSON.parse('{"turn":2,"jumpContinuationLoc":0,"squares":[null,null,8,null,5,null,2,null,2,null,2,null,8,null,8,null,8,null,null,null,2,null,8,null,8,null,1,null,8,null,8,null,8,null,8,null,null,null,8,null,2,null,8,null,8,null,8,null,8,null,6,null,8,null,null,null,8,null,8,null,8,null,1,null,1,null,8,null,8,null,8],"movesSinceProgress":0,"legalMoves":[{"from":20,"to":28},{"from":20,"to":30},{"from":50,"to":42},{"from":50,"to":58},{"from":50,"to":60},{"from":6,"to":14},{"from":6,"to":16},{"from":8,"to":16},{"from":40,"to":48}],"checkers":[null,[64,62,4,26],[20,50,6,8,10,40]]}');
+    var off = newSearch(9).genMoveDetail(new checkers.Game(JSON.parse(JSON.stringify(state))));
+    var on = newSearch(9, { tt: true }).genMoveDetail(new checkers.Game(JSON.parse(JSON.stringify(state))));
+    assert.ok(Math.abs(off.value - on.value) < TT_DECAY_TOLERANCE,
+        "TT off=" + off.value + " vs TT on=" + on.value);
+});
+
+test('transposition table stays within decay noise of plain search and reduces evals (BUG #4, fixed)', function () {
+    checkers.seed(3);
+    var rand = new (require('../common.js').Random)(400);
+    var tested = 0, evalsOff = 0, evalsOn = 0;
+    for (var gi = 0; gi < 100 && tested < 6; gi++) {
+        var g = new checkers.Game();
+        var plies = 4 + rand.int(30);
+        var dead = false;
+        for (var step = 0; step < plies; step++) {
+            var moves = g.getMoves();
+            if (moves.length === 0) { dead = true; break; }
+            g.makeMove(moves[rand.int(moves.length)], true);
+        }
+        if (dead || g.getMoves().length === 0) continue;
+        tested++;
+        var sOff = newSearch(8);
+        var sOn = newSearch(8, { tt: true });
+        var off = sOff.genMoveDetail(g.copy());
+        var on = sOn.genMoveDetail(g.copy());
+        evalsOff += sOff.evalCounter;
+        evalsOn += sOn.evalCounter;
+        if (off.value !== undefined && on.value !== undefined) {
+            assert.ok(Math.abs(off.value - on.value) < TT_DECAY_TOLERANCE,
+                "position " + tested + ": TT off=" + off.value + " vs on=" + on.value);
+        }
+    }
+    assert.strictEqual(tested, 6);
+    assert.ok(evalsOn < evalsOff,
+        "TT should reduce evaluations (off=" + evalsOff + ", on=" + evalsOn + ")");
+});
 
 test('KNOWN BUG #7: alpha-beta pruning changes the root value (depth-decay applied outside the window)',
     { todo: 'negamax multiplies each child value by 0.99999 AFTER the child was searched with ' +
