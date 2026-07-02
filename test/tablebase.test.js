@@ -350,3 +350,43 @@ test('canonical v3 files match their source fixtures entry-for-entry',
             }
         });
     });
+
+test('canonical v3 files contain no 54-bit key collisions (conversion provably lossless)',
+    { skip: !(fs.existsSync(forcedPath) && fs.existsSync(unforcedPath)) && 'files not present' },
+    function () {
+        // v3 keeps 31 h0 bits + 23 h1 bits per entry. Distinct positions
+        // colliding on all 54 bits would make lookups ambiguous; this audit
+        // proves every stored entry remains uniquely keyed (the legacy
+        // forced file was also checked against its full 31-bit h1 before
+        // conversion: the dropped bits never disambiguated anything).
+        [forcedPath, unforcedPath].forEach(function (p) {
+            var tb = new checkers.ResultList2(loadBuffer(p));
+            var n = tb.getStats().size;
+            var collisions = 0;
+            var prev = tb.entryAt(0);
+            for (var i = 1; i < n; i++) {
+                var e = tb.entryAt(i);
+                if (e.h0 === prev.h0) {
+                    // walk the whole equal-h0 run pairwise (runs are tiny)
+                    var run = [prev, e];
+                    while (i + 1 < n) {
+                        var next = tb.entryAt(i + 1);
+                        if (next.h0 !== e.h0) break;
+                        run.push(next);
+                        i++;
+                    }
+                    for (var a = 0; a < run.length; a++) {
+                        for (var b = a + 1; b < run.length; b++) {
+                            if (run[a].h1Hi === run[b].h1Hi && run[a].h1Lo === run[b].h1Lo) {
+                                collisions++;
+                            }
+                        }
+                    }
+                    prev = run[run.length - 1];
+                } else {
+                    prev = e;
+                }
+            }
+            assert.strictEqual(collisions, 0, p + " has ambiguous 54-bit keys");
+        });
+    });
