@@ -122,6 +122,15 @@ How it stays fair and meaningful:
 Run `node arena.js --help 2>/dev/null || head -50 arena.js` for the full flag
 list (documented in the header comment).
 
+### Evaluation tuning protocol
+
+Eval parameters are learned, not assumed: scan candidates head-to-head via
+the arena (`--opts-a`/`--opts-b`) with shared seeded openings in both forced
+modes, then confirm the winner with a large fast-game sample. **Testing at
+depth 4 is the standing protocol** — the early experiments below ran extra
+confirmations at depths 5-6, and the deeper runs matched the depth-4 verdict
+in direction every single time, so they were dropped as not worth their cost.
+
 ### Learned king value
 
 The evaluation's king weight (originally a hardcoded 2.0× a pawn) is now
