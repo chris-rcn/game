@@ -64,7 +64,11 @@ test('self-play match (new vs new) is exactly color-symmetric', function () {
     });
 });
 
-test('new vs baseline (currently identical code) shows zero divergences and a tied match', function () {
+test('new vs baseline shows zero rules divergences; forced mode still ties exactly', function () {
+    // The quiescence fix (BUGS.md #11) makes the versions differ in unforced
+    // mode, but it provably cannot change forced-mode play (all-jump move
+    // lists behave identically), and it never touches the rules, so the
+    // shadow replay must stay divergence-free in both modes.
     var match = arena.playMatch({
         games: 4, depth: 2, seed: 5,
         forcedModes: [true, false],
@@ -74,8 +78,11 @@ test('new vs baseline (currently identical code) shows zero divergences and a ti
     match.results.forEach(function (stats) {
         assert.strictEqual(stats.games, 4);
         assert.deepStrictEqual(stats.divergences, [],
-            "identical rules must not diverge: " + JSON.stringify(stats.divergences[0]));
-        assert.strictEqual(stats.aWins, stats.bWins, "identical engines must tie the match");
+            "search-only fix must not diverge on rules: " + JSON.stringify(stats.divergences[0]));
+        if (stats.forced) {
+            assert.strictEqual(stats.aWins, stats.bWins,
+                "forced-mode play is bit-identical, so the match must tie exactly");
+        }
     });
 });
 

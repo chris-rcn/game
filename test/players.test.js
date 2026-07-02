@@ -77,6 +77,19 @@ test('Search takes the capture over a quiet move in unforced mode', function () 
     assert.strictEqual(move.from + '>' + move.to, '40>24');
 });
 
+test('quiescence engages in unforced mode: depth-1 search sees the recapture (BUG #11, fixed)', function () {
+    // Same poisoned-capture setup as below but in unforced mode at depth 1.
+    // The recapture by the king on 42 lies beyond the search horizon, so only
+    // quiescence can see it. The original code tested whether the LAST
+    // generated move was a jump — always a slide in unforced mode — so
+    // quiescence never ran and the search grabbed the poisoned piece (48>32).
+    checkers.setForcedJumps(false);
+    var g = h.makeGame({ turn: 'black', pieces: { 48: 'b', 38: 'r', 40: 'r', 42: 'R' } });
+    var detail = newSearch(1).genMoveDetail(g);
+    assert.strictEqual(detail.move.from + '>' + detail.move.to, '48>28',
+        "quiescence must reveal the recapture after 48>32");
+});
+
 test('Search avoids the poisoned capture', function () {
     // Black pawn 48 must jump (forced) and can capture either 38 (landing 28,
     // safe) or 40 (landing 32, where the red king on 42 immediately recaptures

@@ -110,6 +110,38 @@ For 20 fps over a 300 ms animation, that should be `6` frames at `50` ms. The tw
 errors cancel so the animation still lasts 300 ms, but `setInterval(animate, 4.5)`
 redraws at ~220 Hz instead of 20 Hz, burning CPU for nothing.
 
+### 11. Quiescence search never runs in unforced mode — `players.js:142` — **FIXED in root copy**
+The "keep searching, this position is noisy" test was
+```js
+var lastAvailableMove = moves[moves.length - 1];
+var canContinue = pub.doQuiesce && (moves.length === 1 ||
+    Math.abs(lastAvailableMove.from - lastAvailableMove.to) > maxDiagonalOffset);
+```
+Move generation always emits jumps before slides, so in unforced mode the
+*last* move is a slide whenever any slide exists and quiescence never engages
+(in forced mode every move is a jump when any jump exists, which hid the bug).
+The search therefore evaluated mid-capture-exchange positions at face value —
+a textbook horizon effect: at the leaf, a freshly grabbed piece counts as won
+material even when the recapture is forced.
+
+The fix tests `moves[0]` instead, which is a jump iff any jump is available —
+but that alone is not enough: in unforced mode the side to move may *decline*
+the capture and slide, and extending the search over slides below the horizon
+recurses without bound (instant stack overflow in match play; plausibly why
+the original check "worked" — it accidentally disabled the whole path). So
+when the move list mixes jumps and slides at quiescence depth, the fixed code
+searches **captures only with the static eval as a stand-pat floor** —
+standard quiescence for optional-capture rules, and termination is guaranteed
+because every searched move removes a piece. Forced-mode move lists are never
+mixed, so forced-mode play is provably bit-identical to the old code, and the
+arena's shadow replay confirmed zero rules divergences in both modes.
+*Evidence:* in unforced mode at depth 1, the poisoned-capture position in
+`players.test.js` was played 48>32 (piece immediately recaptured) before the
+fix and 48>28 after. This bug was selected as the biggest playing-strength fix
+because the other search bugs are gated off by default (#4 needs
+`useTranspositionTable`, #5 needs iterative deepening) or are ~1e-5 noise (#7).
+The bug remains present in `baseline/players.js` for arena comparison.
+
 ## Minor notes (no tests)
 
 - `checkersUi.js:112` — `if (selectedLocation >= 0)` is true for `null`

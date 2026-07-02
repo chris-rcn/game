@@ -19,6 +19,10 @@ CHF.checkers.players = function() {
     var boardSize = checkers.getBoardSize();
     var maxDiagonalOffset = boardSize + 2;
 
+    function isJumpMove(move) {
+        return Math.abs(move.from - move.to) > maxDiagonalOffset;
+    }
+
     function Random(seed) {
         var pub = this;
         var skipChecks = true;
@@ -136,16 +140,32 @@ CHF.checkers.players = function() {
                 result.valueIsKnown = true;
                 return result;
             }
+            var standPat = null;
             if (depth >= currentMaxDepth) {
-                // Continue on forced move or jumps.
-                var lastAvailableMove = moves[moves.length - 1];
-                var canContinue = pub.doQuiesce && (moves.length === 1 || Math.abs(lastAvailableMove.from - lastAvailableMove.to) > maxDiagonalOffset);
+                // Continue on forced move or jumps.  Jumps are generated
+                // before slides, so moves[0] is a jump iff any jump is
+                // available; the last move is a slide in unforced mode even
+                // when captures are pending.
+                var firstIsJump = isJumpMove(moves[0]);
+                var canContinue = pub.doQuiesce && (moves.length === 1 || firstIsJump);
                 if (!canContinue) {
                     pub.evalCounter++;
                     var evaluation = pub.evalFunction(game, depth, moves);
                     result.value = evaluation + pub.evalDither * (random.float() - 0.5);
                     result.valueIsKnown = (Math.abs(result.value) === 1);
                     return result;
+                }
+                if (firstIsJump && !isJumpMove(moves[moves.length - 1])) {
+                    // Mixed list: captures are optional here (unforced mode).
+                    // Search only the jumps, with the static eval as the
+                    // stand-pat floor; searching the slides too would recurse
+                    // without bound.
+                    pub.evalCounter++;
+                    standPat = pub.evalFunction(game, depth, moves) + pub.evalDither * (random.float() - 0.5);
+                    moves = moves.filter(isJumpMove);
+                    if (pub.doAlphaBeta && standPat > alpha) {
+                        alpha = standPat;
+                    }
                 }
                 //logIndented(depth, fmt("In unlimited quiescence search at depth {}", depth));
             }
@@ -200,6 +220,12 @@ CHF.checkers.players = function() {
                         break;
                     }
                 }
+            }
+            if (standPat !== null && standPat > result.value) {
+                result.value = standPat;
+                result.move = null;
+                result.distanceFromRoot = depth;
+                result.valueIsKnown = false;
             }
             if (pub.useTranspositionTable) {
                 ttEntry = {};
