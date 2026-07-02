@@ -369,18 +369,18 @@ test('property: checked makeMove accepts exactly the moves in getMoves (both jum
     checkers.setForcedJumps(true);
 });
 
-test('DESIGN GAP #4: drawThreshold is tracked but never ends the game',
-    { todo: 'The engine maintains movesSinceProgress and exposes getDrawThreshold(), but no code ' +
-            'path ever declares a draw: getMoves() stays non-empty forever in a king-vs-king ' +
-            'shuffle, so a game can never terminate as a draw (the browser UI would ping-pong ' +
-            'endlessly with two computer players).' },
-    function () {
-        var g = h.makeGame({
-            turn: 'black',
-            pieces: { 64: 'B', 8: 'R' },
-            movesSinceProgress: checkers.getDrawThreshold() + 10
-        });
-        assert.strictEqual(g.getMoves().length, 0,
-            "expected the game to be over (drawn) after " + g.getMovesSinceProgress() +
-            " moves without progress");
+test('there is deliberately no draw clock: play continues past drawThreshold (BUGS.md #6, by design)', function () {
+    // Confirmed author intent: draws are a game-theoretic property of the
+    // position (tablebase value 0), not a termination rule. drawThreshold /
+    // movesSinceProgress are generation-time apparatus for the offline
+    // tablebase builder; live games never end by clock. External harnesses
+    // (like arena.js) adjudicate long games themselves.
+    var g = h.makeGame({
+        turn: 'black',
+        pieces: { 64: 'B', 8: 'R' },
+        movesSinceProgress: checkers.getDrawThreshold() + 10
     });
+    assert.ok(g.getMoves().length > 0,
+        "the game must keep going past the threshold; only external harnesses adjudicate draws");
+    assert.ok(g.getMovesSinceProgress() > checkers.getDrawThreshold());
+});

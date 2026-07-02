@@ -101,12 +101,31 @@ and depth. The bug remains in `baseline/players.js` for arena comparison.
 
 ## Medium / low impact
 
-### 6. No draw rule is ever applied — `checkers.js` / `checkersUi.js`
-The engine diligently tracks `movesSinceProgress` and exposes
-`getDrawThreshold()`, and the Zobrist hash even mixes the counter in — but no code
-path ever ends the game as a draw. `getMoves()` in a king-vs-king shuffle stays
-non-empty forever, `players.Random.playout` relies on random termination, and the
-UI would ping-pong endlessly if both sides were computer-controlled.
+### 6. No draw rule is ever applied — `checkers.js` / `checkersUi.js` — **NOT A BUG: confirmed design decision**
+No code path ever ends a live game as a draw: `getMoves()` in a king-vs-king
+shuffle stays non-empty forever. Confirmed by the author as intended: a draw is a
+*game-theoretic property of the position* (neither side can force a win under
+optimal play), realized as the tablebase value `v = 0` — not a clock rule that
+terminates play. There is deliberately no draw clock in the game.
+
+The `movesSinceProgress`/`drawThreshold` machinery is **generation-time
+apparatus**, not a live rule: computing clockless draws by forward search needs a
+progress bound to terminate, and the code says as much — `drawThreshold`'s comment
+("trial and error … at least 18") records calibrating the bound until the computed
+values converge, and `genZobristData` builds the `sinceProgress` hash channel
+separately "so a change in drawThreshold should be fine", i.e. so the generator
+could re-run with different bounds without shifting position hashes. Live
+tablebase lookups use `hashBase()` (position only, no clock), consistent with the
+stored values being clockless positional truths; `hash(true)` was the generator's
+memo key.
+
+Consequences, all consistent with the design: the shipped UI always has a human on
+one side (the autoplay-both-sides functions have no buttons in `index.html`), so a
+dead-drawn game is abandoned by the human, and a computer draw withholds the
+level-up exactly like a computer win; the search is draw-aware only where it
+matters (tablebase hits propagate 0); and the arena adjudicates draws externally
+as a harness convenience (`--draw-plies`/`--max-plies`), which remains the
+sanctioned approach rather than an engine rules change.
 
 ### 7. Alpha-beta interacts inconsistently with the depth-decay factor — `players.js:184` — **FIXED in root copy**
 `childResult.value *= 0.99999` (the "prefer shorter wins" tie-break) was applied
