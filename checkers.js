@@ -730,11 +730,12 @@ CHF.checkers = function() {
             return (color & RED) ? rank(loc) : boardSizeM1-rank(loc);
         }
         pub.forwardRank = forwardRank;
-        function materialEval() {
+        function materialEval(kingWeight) {
             var polarity = turn === BLACK ? 1 : -1;
-            return polarity * (2 * materialEvalBlack() - 1);
+            return polarity * (2 * materialEvalBlack(kingWeight) - 1);
         }
-        function materialEvalBlack() {
+        function materialEvalBlack(kingWeight) {
+            kingWeight = kingWeight || 2;
             var black = 0;
             var red = 0;
             var i, loc, checkersColor;
@@ -742,7 +743,7 @@ CHF.checkers = function() {
             for (i=0; i<checkersColor.length; i++) {
                 loc = checkersColor[i];
                 if ((squares[loc] & KING)) {
-                    black += 2;
+                    black += kingWeight;
                 } else {
                     black += 1;
                 }
@@ -751,7 +752,7 @@ CHF.checkers = function() {
             for (i=0; i<checkersColor.length; i++) {
                 loc = checkersColor[i];
                 if ((squares[loc] & KING)) {
-                    red += 2;
+                    red += kingWeight;
                 } else {
                     red += 1;
                 }

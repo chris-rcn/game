@@ -285,13 +285,24 @@ test('getMoves returns a defensive copy', function () {
     assert.strictEqual(g.getMoves().length, 7);
 });
 
-test('materialEvalBlack weights kings double', function () {
+test('materialEvalBlack weights kings double by default', function () {
     var g = h.makeGame({ turn: 'black', pieces: { 40: 'B', 48: 'B', 2: 'r' } });
     // black = 2 kings = 4, red = 1 pawn = 1 -> 4/5
     assert.strictEqual(g.materialEvalBlack(), 0.8);
     assert.ok(Math.abs(g.materialEval() - (2 * 0.8 - 1)) < 1e-12);
     var swapped = g.swapTurnCopy();
     assert.ok(Math.abs(swapped.materialEval() + (2 * 0.8 - 1)) < 1e-12);
+});
+
+test('materialEvalBlack accepts a custom king weight', function () {
+    var g = h.makeGame({ turn: 'black', pieces: { 40: 'B', 48: 'B', 2: 'r' } });
+    // 2 kings at 1.5 = 3, vs 1 pawn -> 3/4
+    assert.strictEqual(g.materialEvalBlack(1.5), 0.75);
+    assert.strictEqual(g.materialEvalBlack(2), 0.8);
+    assert.ok(Math.abs(g.materialEval(1.5) - (2 * 0.75 - 1)) < 1e-12);
+    // Pawn-only positions are unaffected by the weight.
+    var pawns = h.makeGame({ turn: 'black', pieces: { 40: 'b', 2: 'r' } });
+    assert.strictEqual(pawns.materialEvalBlack(1.5), pawns.materialEvalBlack(3));
 });
 
 test('forwardRank counts from each side\'s home row', function () {

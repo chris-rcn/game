@@ -72,8 +72,9 @@ CHF.checkers.players = function() {
         pub.logDepth = -1;
         pub.maxDepth = initialMaxDepth;
         pub.tablebase = null;
+        pub.kingValue = 2; // pawns are worth 1
         pub.evalFunction = function(game) {
-            return game.materialEval();
+            return game.materialEval(pub.kingValue);
         };
         pub.evalDither = 0.001;
         pub.doQuiesce = true;
