@@ -19,6 +19,14 @@ function newSearch(depth, opts) {
     return s;
 }
 
+test('Search defaults to the learned king value of 1.4', function () {
+    // Tuned by arena self-play against the original 2.0 (see BUGS.md /
+    // README): 53.7% ± 3.1 over 1000 games across depths 4 and 6, with the
+    // whole scan bracketing it (every K<2 won, every K>2 lost).
+    var s = new players.Search(3);
+    assert.strictEqual(s.kingValue, 1.4);
+});
+
 test('Random player: genMove returns a legal move, deterministically per seed', function () {
     var g = new checkers.Game();
     var p1 = new players.Random(7);

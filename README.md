@@ -122,6 +122,28 @@ How it stays fair and meaningful:
 Run `node arena.js --help 2>/dev/null || head -50 arena.js` for the full flag
 list (documented in the header comment).
 
+### Learned king value
+
+The evaluation's king weight (originally a hardcoded 2.0× a pawn) is now
+`Search.kingValue`, tuned by arena self-play rather than assumed. Head-to-head
+vs 2.0 with shared seeded openings, both modes:
+
+| K | depth 4 (120/mode) | K | depth 4 |
+|---|---|---|---|
+| 1.10 | 62.1% / 55.0% | 2.50 | 40.4% / 45.4% |
+| 1.25 | 59.2% / 57.9% | 3.00 | 40.0% / 43.3% |
+| 1.50 | 60.8% / 51.2% | | |
+| 1.75 | 57.1% / 54.2% | | |
+
+Every candidate below 2.0 won; every candidate above lost. The adopted value
+**1.4** (the checkers-literature ballpark) scored 54.4%/53.3% over 400 fast
+games per mode (depth 4) and held at 53.5%/52.5% in slow games (depth 6,
+100/mode) — pooled 53.7% ± 3.1 over 1000 games. Reproduce with:
+
+```sh
+node arena.js --a new --b new --opts-a kingValue=1.4 --opts-b kingValue=2 --games 400
+```
+
 ## Test coverage summary
 
 - **Rules**: opening position, slides, jumps, forced-jump exclusivity,

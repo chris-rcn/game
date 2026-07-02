@@ -72,7 +72,11 @@ CHF.checkers.players = function() {
         pub.logDepth = -1;
         pub.maxDepth = initialMaxDepth;
         pub.tablebase = null;
-        pub.kingValue = 2; // pawns are worth 1
+        // Pawns are worth 1. Learned by arena self-play (both modes, depths
+        // 4 and 6, ~2200 games): every candidate below the original 2.0 beat
+        // it and every candidate above lost; 1.4 — the checkers-literature
+        // ballpark — scored 53.7% ± 3.1 against 2.0 over 1000 games.
+        pub.kingValue = 1.4;
         pub.evalFunction = function(game) {
             return game.materialEval(pub.kingValue);
         };
