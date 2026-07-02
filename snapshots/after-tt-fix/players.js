@@ -267,21 +267,17 @@ CHF.checkers.players = function() {
                 for (currentMaxDepth=1; ; currentMaxDepth+=1) {
                     transpositionTable = {};
                     ttSize = 0;
-                    // negamax returns the result wrapper; the Move (and its
-                    // .forced flag) live on result.move.
-                    var result = negamax(game, 0, -1e9, 1e9, 1, killer);
-                    if (result.move && !result.move.forced) {
+                    var move = negamax(game, 0, -1e9, 1e9, 1, killer);
+                    if (move && !move.forced) {
                         if (common.elapsedSec(startMs) > limitSec || currentMaxDepth >= pub.maxDepth) {
                             pub.typicalDepth.add(currentMaxDepth);
-                            return result;
+                            return move;
                         }
                         if (pub.useKillerMove) {
-                            killer = result.move;
+                            killer = move;
                         }
                     } else {
-                        // Forced move or game over: deepening cannot change
-                        // the answer.
-                        return result;
+                        return move;
                     }
                 }
             }

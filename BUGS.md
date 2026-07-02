@@ -65,16 +65,22 @@ Mitigating factor for the original site: `useTranspositionTable` defaults to
 `false`, so the shipped UI never hit this. The bug remains in
 `baseline/players.js` for arena comparison.
 
-### 5. `genMoveDetail` checks `.forced` on the wrong object — `players.js:238`
+### 5. `genMoveDetail` checks `.forced` on the wrong object — `players.js:238` — **FIXED in root copy**
 `negamax` flags the *Move* (`moves[0].forced = true; result.move = moves[0]`), but
-the iterative-deepening loop tests `move.forced` on the *result wrapper*, which is
-always `undefined`. Two features die from this one line:
-- the forced-move early exit never triggers (the loop deepens to `maxDepth` even
+the iterative-deepening loop tested `move.forced` on the *result wrapper*, which is
+always `undefined`. Two features died from this one line:
+- the forced-move early exit never triggered (the loop deepened to `maxDepth` even
   when there is only one legal move);
-- `killer = move` stores the wrapper — which has no `from`/`to` — so the
-  killer-move comparison `moves[m].from === killer.from` never matches and the
-  `useKillerMove` optimization is a silent no-op.
-Fix: use `move.move.forced` / `killer = move.move`.
+- `killer = move` stored the wrapper — which has no `from`/`to` — so the
+  killer-move comparison `moves[m].from === killer.from` never matched and the
+  `useKillerMove` optimization was a silent no-op (killer on/off was
+  bit-identical).
+Fixed by reading `result.move.forced` and storing `killer = result.move`. Both
+features only run in the iterative-deepening / time-budget path, so fixed-depth
+play is untouched. Post-fix, killer ordering prunes ~14-16% of leaf evaluations
+at depths 6-7 on a pinned midgame position while returning the same move and
+value, and a forced-move position returns after the first iteration. The bug
+remains in `baseline/players.js` for arena comparison.
 
 ## Medium / low impact
 

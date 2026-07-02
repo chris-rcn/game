@@ -43,7 +43,9 @@
 //
 // Options (defaults in brackets):
 //   --games N            games per forced mode, rounded up to even [100]
-//   --a, --b WHICH       'new' (root) or 'baseline' [a=new, b=baseline]
+//   --a, --b WHICH       'new' (root), 'baseline', or a snapshot directory
+//                        containing common/checkers/players.js, e.g.
+//                        'snapshots/after-tt-fix' [a=new, b=baseline]
 //   --depth N            search depth for both sides [4]
 //   --depth-a/-b N       per-side override
 //   --random-a/-b        use the random player instead of search
@@ -62,22 +64,30 @@
 //   --opening-plies N    random opening plies shared by each game pair [6]
 //   --draw-plies N       plies without progress adjudicated as a draw [50]
 //   --max-plies N        hard game-length cap, adjudicated as a draw [300]
-//   --referee WHICH      'new' or 'baseline' rules govern [new]
+//   --referee WHICH      whose rules govern (same values as --a/--b) [new]
 //   --no-verify          skip shadow-replay divergence detection
 //   --verbose            per-game result lines
 
 var path = require('path');
+var fs = require('fs');
 
 var BLACK = 1;
 var RED = 2;
 
 var engineCache = {};
+// which: 'new' (root files), 'baseline' (baseline/), or any directory path
+// (relative to the repo root) containing common.js/checkers.js/players.js —
+// e.g. 'snapshots/after-tt-fix'.
 function loadEngine(which) {
-    if (which !== 'new' && which !== 'baseline') {
-        throw new Error("engine must be 'new' or 'baseline', got: " + which);
-    }
     if (!engineCache[which]) {
-        var dir = which === 'baseline' ? path.join(__dirname, 'baseline') : __dirname;
+        var dir = which === 'new' ? __dirname :
+            which === 'baseline' ? path.join(__dirname, 'baseline') :
+            path.resolve(__dirname, which);
+        ['common.js', 'checkers.js', 'players.js'].forEach(function (f) {
+            if (!fs.existsSync(path.join(dir, f))) {
+                throw new Error("engine '" + which + "': missing " + path.join(dir, f));
+            }
+        });
         engineCache[which] = {
             name: which,
             common: require(path.join(dir, 'common.js')),
@@ -234,9 +244,11 @@ function playMode(forced, opts) {
     Object.keys(involved).forEach(function (w) {
         loadEngine(w).checkers.setForcedJumps(forced);
     });
-    var shadowName = opts.referee === 'new' ? 'baseline' : 'new';
+    // Shadow-verify with whichever participating version is not refereeing.
+    var shadowName = opts.a.engine !== opts.referee ? opts.a.engine :
+        opts.b.engine !== opts.referee ? opts.b.engine : null;
     var shadowEngine = null;
-    if (opts.verify) {
+    if (opts.verify && shadowName) {
         loadEngine(shadowName).checkers.setForcedJumps(forced);
         shadowEngine = loadEngine(shadowName);
     }
@@ -337,9 +349,9 @@ function playMatch(opts) {
     opts.forcedModes.forEach(function (forced) {
         results.push(playMode(forced, opts));
     });
-    // Leave every engine copy back at the default.
-    ['new', 'baseline'].forEach(function (w) {
-        try { loadEngine(w).checkers.setForcedJumps(true); } catch (e) { /* baseline may be absent */ }
+    // Leave every involved engine copy back at the default.
+    [opts.referee, opts.a.engine, opts.b.engine].forEach(function (w) {
+        loadEngine(w).checkers.setForcedJumps(true);
     });
     // Regression alarms across all modes.
     var alarms = [];

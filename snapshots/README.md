@@ -1,0 +1,19 @@
+# snapshots/ — intermediate engine versions for the arena
+
+`baseline/` stays frozen at the original mirrored code forever (the cumulative
+anchor). Directories here capture intermediate states so a single fix can be
+measured in isolation instead of conflated with everything before it.
+
+Take a snapshot of the state just before starting a fix, straight from git:
+
+```sh
+mkdir -p snapshots/<name>
+for f in common.js checkers.js players.js; do
+  git show <commit>:$f > snapshots/<name>/$f
+done
+node arena.js --b snapshots/<name> ...
+```
+
+| Snapshot | Taken from | Contains |
+|---|---|---|
+| `after-tt-fix` | commit `12651a0` | quiescence fix (#11) + transposition-table fix (#4); pre killer-move fix (#5) |

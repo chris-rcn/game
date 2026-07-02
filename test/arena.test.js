@@ -168,6 +168,26 @@ test('playMatch reports alarms, including self-play asymmetry detection scaffold
     assert.strictEqual(match.results[0].aWins, match.results[0].bWins);
 });
 
+test('snapshot directories load as engines and play against the root version', function () {
+    var fs = require('node:fs');
+    var path = require('node:path');
+    if (!fs.existsSync(path.join(__dirname, '..', 'snapshots', 'after-tt-fix', 'players.js'))) {
+        return; // snapshot not present in this checkout
+    }
+    var snap = arena.loadEngine('snapshots/after-tt-fix');
+    assert.notStrictEqual(snap.players, arena.loadEngine('new').players);
+    assert.throws(function () { arena.loadEngine('snapshots/no-such-dir'); }, /missing/);
+    var match = arena.playMatch({
+        games: 2, depth: 2, seed: 31, forcedModes: [true],
+        a: { engine: 'new', type: 'search', depth: 2 },
+        b: { engine: 'snapshots/after-tt-fix', type: 'search', depth: 2 },
+        drawPlies: 40, maxPlies: 150
+    });
+    assert.strictEqual(match.options.verify, true);
+    assert.deepStrictEqual(match.results[0].divergences, [], "snapshot shares the same rules");
+    assert.deepStrictEqual(match.alarms, []);
+});
+
 test('arena leaves both engine copies back in forced-jumps mode', function () {
     arena.playMatch({ games: 2, depth: 1, forcedModes: [false], verify: false,
         drawPlies: 30, maxPlies: 100 });

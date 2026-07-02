@@ -79,6 +79,18 @@ node arena.js --max-seconds 0.05                      # time-budgeted search (no
 
 Unknown option names fail fast before any game is played.
 
+As fixes accumulate, comparing only against `baseline/` conflates their
+effects. `--a`/`--b`/`--referee` therefore also accept snapshot directories
+(any directory holding `common.js`/`checkers.js`/`players.js`), and
+`snapshots/` holds intermediate states reconstructed from git — see
+`snapshots/README.md`. `baseline/` remains the permanent anchor for
+cumulative measurements; snapshot the pre-fix commit when you want a fix
+measured in isolation:
+
+```sh
+node arena.js --b snapshots/after-tt-fix --opts useIterativeDeepening=true
+```
+
 How it stays fair and meaningful:
 
 - The two versions load as **independent Node modules**, so module-level state

@@ -127,22 +127,42 @@ test('Search under iterative deepening returns the only legal move when forced',
     assert.strictEqual(detail.move.from + '>' + detail.move.to, '64>56');
 });
 
-test('KNOWN BUG #5: forced-move flag is checked on the wrong object, so the killer-move ' +
-     'and forced-move logic in genMoveDetail never fires',
-    { todo: 'negamax sets .forced on result.move (the Move object) but genMoveDetail tests ' +
-            'move.forced on the result wrapper, which is always undefined. Consequences: ' +
-            '(a) the forced-move early exit is dead code — the loop deepens to maxDepth anyway; ' +
-            '(b) killer = move stores the wrapper (which has no from/to), so the killer-move ' +
-            'ordering optimization never matches and silently no-ops.' },
-    function () {
-        var g = h.makeGame({ turn: 'black', pieces: { 64: 'b', 2: 'r' } });
-        var detail = newSearch(3, { maxSeconds: 5 }).genMoveDetail(g);
-        // The Move object is flagged...
-        assert.strictEqual(detail.move.forced, true);
-        // ...but genMoveDetail looked for the flag here, where it never exists:
-        assert.strictEqual(detail.forced, true,
-            "genMoveDetail checks `move.forced` on the result wrapper; it is undefined");
-    });
+test('forced move under iterative deepening returns immediately (BUG #5, fixed)', function () {
+    var g = h.makeGame({ turn: 'black', pieces: { 64: 'b', 2: 'r' } });
+    var s = newSearch(5, { id: true });
+    var detail = s.genMoveDetail(g);
+    assert.strictEqual(detail.move.from + '>' + detail.move.to, '64>56');
+    assert.strictEqual(detail.move.forced, true);
+    // Early exit is observable through typicalDepth: only the timed return
+    // path records it, so it must stay empty (NaN). Before the fix the loop
+    // deepened all the way to maxDepth and recorded 5 here.
+    assert.ok(isNaN(s.typicalDepth.value()),
+        "search should stop at the first iteration on a forced move, got typicalDepth=" +
+        s.typicalDepth.value());
+});
+
+test('killer-move ordering engages under iterative deepening (BUG #5, fixed)', function () {
+    // Root-move ordering from the previous iteration's best move only prunes
+    // extra nodes if the killer actually matches — pre-fix it stored the
+    // result wrapper (no from/to) and never matched, making killer on/off
+    // bit-identical. Post-fix it must change (here: reduce) the node count
+    // while leaving the chosen move and value essentially unchanged.
+    var g = h.fromCompact('rrrrrrrrr.r...r..b..bbrbb.bbbbbb', 'b');
+    function run(useKiller) {
+        var s = newSearch(7, { id: true });
+        s.useKillerMove = useKiller;
+        var d = s.genMoveDetail(g.copy());
+        return { evals: s.evalCounter, value: d.value, move: d.move.from + '>' + d.move.to };
+    }
+    var withKiller = run(true);
+    var withoutKiller = run(false);
+    assert.strictEqual(withKiller.move, withoutKiller.move);
+    assert.ok(Math.abs(withKiller.value - withoutKiller.value) < 1e-4,
+        "ordering must not change the result: " + withKiller.value + " vs " + withoutKiller.value);
+    assert.ok(withKiller.evals < withoutKiller.evals,
+        "killer ordering should prune more (with=" + withKiller.evals +
+        ", without=" + withoutKiller.evals + ")");
+});
 
 // The transposition table (BUGS.md #4, fixed) can legitimately shift root
 // values by ~1e-5: an entry searched DEEPER than the current node needs is
