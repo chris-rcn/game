@@ -302,31 +302,14 @@ test('forwardRank counts from each side\'s home row', function () {
     assert.strictEqual(g.forwardRank(2, h.BLACK), 7);
 });
 
-test('randomBoard places the requested number of pieces', function () {
-    checkers.seed(12345);
-    for (var i = 0; i < 20; i++) {
-        var g = new checkers.Game();
-        g.randomBoard(8, true, false);
-        assert.strictEqual(g.getCheckerCount(), 8);
-        h.assertListsConsistent(g);
-    }
+test('randomBoard has been removed (BUG #2 resolved by removal); seed() remains for UI compatibility', function () {
+    var g = new checkers.Game();
+    assert.strictEqual(g.randomBoard, undefined);
+    // checkersUi.js calls checkers.seed() at init, so the export must survive
+    // even though nothing in the engine consumes the seeded RNG anymore.
+    assert.strictEqual(typeof checkers.seed, 'function');
+    assert.doesNotThrow(function () { checkers.seed(1); checkers.seed(); });
 });
-
-test('KNOWN BUG #3: randomBoard(unbalanced) can exceed maxCheckersPerPlayer',
-    { todo: 'The per-color cap uses `var deployed = { BLACK: 0, RED: 0 }` (string keys) but indexes ' +
-            'it with the numeric color constants 1/2, so deployed[color]++ produces NaN and the cap ' +
-            'check never fires. One side routinely receives more than 12 pieces.' },
-    function () {
-        checkers.seed(1);
-        var worst = 0;
-        for (var i = 0; i < 300; i++) {
-            var g = new checkers.Game();
-            g.randomBoard(24, true, true);
-            var counts = g.getCheckerCounts();
-            worst = Math.max(worst, counts[0], counts[1]);
-        }
-        assert.ok(worst <= 12, "a side received " + worst + " pieces; cap should be 12");
-    });
 
 test('property: random self-play preserves invariants and every move survives undo/redo', function () {
     checkers.seed(11);

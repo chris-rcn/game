@@ -28,10 +28,6 @@ CHF.checkers = function() {
     var boardSizeM1 = boardSize - 1;
     var boardSizeP1 = boardSize + 1;
 
-    var liveTileCount = boardSize * boardSize / 2;
-    var maxCheckers = liveTileCount - boardSize;
-    var maxCheckersPerPlayer = maxCheckers / 2;
-
     var firstBoardLocation = 1;
     var lastBoardLocation = boardSize * boardSizeP1;
     var jumpsAreForced = true;
@@ -271,56 +267,6 @@ CHF.checkers = function() {
             }
         }
         pub.reset = reset;
-        function randomBoard(initialCheckerCount, allowPawns, allowUnbalanced) {
-            squares = [];
-            checkers = [];
-            checkers[BLACK] = [];
-            checkers[RED] = [];
-            movesSinceProgress = random.int(drawThreshold);
-            var offset = 1;
-            for (var r=0; r<boardSize; r++) {
-                placeRow(OPEN, r * boardSizeP1 + firstBoardLocation + offset);
-                offset = 1 - offset;
-            }
-            var deployed = { BLACK:0, RED: 0 };
-            var color = randomColor();
-            while (getCheckerCount() < initialCheckerCount) {
-                if (allowUnbalanced) {
-                    color = randomColor();
-                    if (deployed[color] === maxCheckersPerPlayer) {
-                        color = otherColor(color);
-                        assert(deployed[color] < maxCheckersPerPlayer);
-                    }
-                }
-                var loc = randomSquare();
-                if (squares[loc] === OPEN) {
-                    if (allowPawns && random.float() < 0.5) {
-                        if (forwardRank(loc, color) === boardSizeM1) {
-                            continue;
-                        }
-                        addChecker(loc, color);
-                    } else {
-                        addChecker(loc, color | KING);
-                    }
-                    deployed[color]++;
-                    color = otherColor(color);
-                }
-            }
-            turn = randomColor();
-            legalMoves = null;
-            jumpContinuationLoc = randomSquare();
-            if ((squares[jumpContinuationLoc] & turn)) {
-                legalMoves = getJumpMoves();
-                if (legalMoves.length === 0) {
-                    legalMoves = null;
-                    jumpContinuationLoc = 0;
-                }
-            } else {
-                jumpContinuationLoc = 0;
-            }
-            checkCheckers();
-        }
-        pub.randomBoard = randomBoard;
         function copy() {
             return new Game(getState());
         }
@@ -329,14 +275,6 @@ CHF.checkers = function() {
                 addChecker(loc, color);
                 loc += 2;
             }
-        }
-        function randomSquare() {
-            var row = random.int(boardSize);
-            var col = (random.int(halfBoardSize) * 2 + (row & 1)) ^ 1;
-            return coordToLoc(row, col);
-        }
-        function randomColor() {
-            return random.float() < 0.5 ? BLACK : RED;
         }
         function getCheckerCount() {
             return checkers[BLACK].length + checkers[RED].length;

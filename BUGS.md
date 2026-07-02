@@ -29,18 +29,27 @@ probes the real `end8Forced` tablebase through root and baseline `ResultList2`
 side by side to prove lookups are behavior-identical, and the game-play path never
 touches `binarySearch` at all. The bug remains in `baseline/common.js`.
 
-### 2. `randomBoard`'s per-color cap never fires — `checkers.js:285`
+### 2. `randomBoard`'s per-color cap never fires — `checkers.js:285` — **RESOLVED by removal**
 ```js
 var deployed = { BLACK: 0, RED: 0 };   // string keys "BLACK"/"RED"
 ...
 deployed[color]++;                     // color is the numeric constant 1 or 2
 ```
-`deployed[1]` starts `undefined`, so the increment produces `NaN`, the guard
-`deployed[color] === maxCheckersPerPlayer` is never true, and the `assert` inside it
-is dead code. With `allowUnbalanced`, one side routinely receives more than the
-12-piece maximum. Fix: key the object by the numeric constants.
+`deployed[1]` starts `undefined`, so the increment produced `NaN`, the guard
+`deployed[color] === maxCheckersPerPlayer` was never true, and the `assert` inside
+it was dead code. With `allowUnbalanced`, one side routinely received more than the
+12-piece maximum.
 *Evidence:* 400 seeded calls to `randomBoard(24, true, true)` produced a side with
 **20** pieces (cap is 12).
+
+`randomBoard` had no production callers (the sole `checkersUi.js` reference is
+commented out; its real consumer was presumably the offline tablebase generator,
+which is not part of the site), so rather than fix dead code it was **removed**
+from the root copy along with its private helpers `randomSquare`/`randomColor` and
+the `liveTileCount`/`maxCheckers`/`maxCheckersPerPlayer` constants only it used.
+`checkers.seed()` and the module RNG are retained because `checkersUi.js` calls
+`seed()` at init, though nothing in the engine consumes the seeded stream anymore.
+The function survives unchanged in `baseline/checkers.js`.
 
 ### 3. Shipped `end8Unforced` tablebase cannot be loaded — data file + `checkers.js:113`
 `ResultList2` requires `byteLength` divisible by 9 (two `Uint32` hashes + one byte
