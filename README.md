@@ -52,14 +52,32 @@ npx http-server . -p 8080   # then open http://localhost:8080/
 ## Arena: new vs old
 
 Before fixing anything, `baseline/` was frozen as the "old" version. Bug fixes
-go in the root files, and the arena measures their effect head-to-head:
+go in the root files and are validated head-to-head. The arena's job is
+**primarily regression prevention, secondarily strength measurement**: every
+run leads with a regression line (rules divergences, illegal moves, contained
+player crashes) and exits non-zero on any alarm — including self-play
+asymmetry when both sides are configured identically, which would indicate a
+determinism regression. The score/Elo lines below it are the strength signal.
 
 ```sh
 npm run arena                            # new vs baseline, 100 games per mode, depth 4
 node arena.js --games 200 --depth 5      # bigger, deeper
-node arena.js --a new --b new            # self-play sanity check (always ties exactly)
+node arena.js --a new --b new            # self-play regression check (must tie exactly)
 node arena.js --forced on --verbose      # one mode, per-game lines
 ```
+
+Fixes to feature-gated code paths need those features enabled during play.
+Any public `Search` field can be set per side (or both) from the CLI:
+
+```sh
+node arena.js --opts useTranspositionTable=true       # arena-test the TT fix (#4)
+node arena.js --opts useIterativeDeepening=true       # exercise ID + killer move (#5)
+node arena.js --opts-a doQuiesce=false                # asymmetric feature comparison
+node arena.js --max-seconds 0.05                      # time-budgeted search (nondeterministic;
+                                                      #   the symmetry alarm is skipped)
+```
+
+Unknown option names fail fast before any game is played.
 
 How it stays fair and meaningful:
 

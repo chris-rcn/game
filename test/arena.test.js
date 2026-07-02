@@ -98,6 +98,76 @@ test('match results are deterministic for a given seed', function () {
     assert.strictEqual(run(), run());
 });
 
+test('makePlayer applies Search feature flags and rejects unknown ones', function () {
+    var p = arena.makePlayer({
+        engine: 'new', type: 'search', depth: 3,
+        searchOptions: { useTranspositionTable: true, useIterativeDeepening: true, evalDither: 0 }
+    });
+    assert.strictEqual(p.inner.useTranspositionTable, true);
+    assert.strictEqual(p.inner.useIterativeDeepening, true);
+    assert.strictEqual(p.inner.evalDither, 0);
+    assert.ok(p.label.indexOf('useTranspositionTable=true') >= 0, "label should show enabled features");
+    assert.throws(function () {
+        arena.makePlayer({ engine: 'new', type: 'search', depth: 3, searchOptions: { useTranspositonTable: true } });
+    }, /unknown Search option/);
+});
+
+test('a crashing player forfeits the game but does not crash the match', function () {
+    var neo = arena.loadEngine('new');
+    neo.checkers.setForcedJumps(true);
+    var players = {};
+    players[arena.BLACK] = { label: 'boom', genMove: function () { throw new Error('kaboom'); } };
+    players[arena.RED] = arena.makePlayer({ engine: 'new', type: 'random', seed: 4 });
+    var result = arena.playGame(neo, players, [], { drawPlies: 50, maxPlies: 100, shadowEngine: null });
+    assert.strictEqual(result.winner, arena.RED);
+    assert.strictEqual(result.reason, 'player-error');
+    assert.strictEqual(result.playerError.by, 'boom');
+    assert.match(result.playerError.error, /kaboom/);
+});
+
+test('a player returning an illegal move forfeits with the move recorded', function () {
+    var neo = arena.loadEngine('new');
+    neo.checkers.setForcedJumps(true);
+    var players = {};
+    players[arena.BLACK] = { label: 'cheat', genMove: function () { return { from: 2, to: 70 }; } };
+    players[arena.RED] = arena.makePlayer({ engine: 'new', type: 'random', seed: 4 });
+    var result = arena.playGame(neo, players, [], { drawPlies: 50, maxPlies: 100, shadowEngine: null });
+    assert.strictEqual(result.winner, arena.RED);
+    assert.strictEqual(result.reason, 'illegal-move');
+    assert.deepStrictEqual(result.illegalMove.move, { from: 2, to: 70 });
+});
+
+test('match with transposition table and iterative deepening enabled runs alarm-free', function () {
+    // Exercises the gated Search code paths (needed to arena-test fixes for
+    // BUGS.md #4 and #5) end to end.
+    var featureOptions = { useTranspositionTable: true, useIterativeDeepening: true };
+    var match = arena.playMatch({
+        games: 2, seed: 21, forcedModes: [true, false],
+        a: { engine: 'new', type: 'search', depth: 3, searchOptions: featureOptions },
+        b: { engine: 'baseline', type: 'search', depth: 3, searchOptions: featureOptions },
+        drawPlies: 40, maxPlies: 150, openingPlies: 6
+    });
+    match.results.forEach(function (stats) {
+        assert.strictEqual(stats.games, 2);
+        assert.deepStrictEqual(stats.playerErrors, []);
+        assert.deepStrictEqual(stats.illegalMoves, []);
+        assert.deepStrictEqual(stats.divergences, []);
+    });
+});
+
+test('playMatch reports alarms, including self-play asymmetry detection scaffolding', function () {
+    // Identical configs => mirror pairing must tie exactly and produce no
+    // alarms; this is the determinism regression tripwire.
+    var spec = { engine: 'new', type: 'search', depth: 2, searchOptions: {} };
+    var match = arena.playMatch({
+        games: 4, seed: 13, forcedModes: [true],
+        a: JSON.parse(JSON.stringify(spec)), b: JSON.parse(JSON.stringify(spec)),
+        drawPlies: 40, maxPlies: 150, verify: false
+    });
+    assert.deepStrictEqual(match.alarms, []);
+    assert.strictEqual(match.results[0].aWins, match.results[0].bWins);
+});
+
 test('arena leaves both engine copies back in forced-jumps mode', function () {
     arena.playMatch({ games: 2, depth: 1, forcedModes: [false], verify: false,
         drawPlies: 30, maxPlies: 100 });

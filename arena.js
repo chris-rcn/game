@@ -2,6 +2,14 @@
 // arena.js — play the root ("new") engine against the frozen baseline/ ("old")
 // engine for many games, in both forced-jump modes.
 //
+// PURPOSE: primarily regression prevention, secondarily strength measurement.
+// A run raises an ALARM (non-zero exit) on any of:
+//   - rules divergence between versions (shadow replay mismatch),
+//   - a player returning an illegal move,
+//   - a player throwing (contained: it forfeits that game, the match goes on),
+//   - self-play asymmetry (identical configs must tie a paired match exactly).
+// The score/Elo lines below the regression line are the strength measurement.
+//
 // Design notes:
 // - The two versions are loaded as independent Node modules (root vs
 //   baseline/), so their module-level state (jumpsAreForced, seeded RNGs)
@@ -27,23 +35,36 @@
 // Usage:
 //   node arena.js                          # new vs baseline, both modes
 //   node arena.js --games 200 --depth 5
-//   node arena.js --a new --b new          # self-play sanity check
+//   node arena.js --a new --b new          # self-play regression check
 //   node arena.js --forced on --verbose
+//   node arena.js --opts useTranspositionTable=true       # exercise TT path
+//   node arena.js --opts useIterativeDeepening=true       # exercise ID+killer
+//   node arena.js --opts-a doQuiesce=false                # asymmetric feature
 //
 // Options (defaults in brackets):
-//   --games N          games per forced mode, rounded up to even [100]
-//   --a, --b WHICH     'new' (root) or 'baseline' [a=new, b=baseline]
-//   --depth N          search depth for both sides [4]
-//   --depth-a/-b N     per-side override
-//   --random-a/-b      use the random player instead of search
-//   --forced MODE      'both', 'on', or 'off' [both]
-//   --seed N           opening-generator seed [1]
-//   --opening-plies N  random opening plies shared by each game pair [6]
-//   --draw-plies N     plies without progress adjudicated as a draw [50]
-//   --max-plies N      hard game-length cap, adjudicated as a draw [300]
-//   --referee WHICH    'new' or 'baseline' rules govern [new]
-//   --no-verify        skip shadow-replay divergence detection
-//   --verbose          per-game result lines
+//   --games N            games per forced mode, rounded up to even [100]
+//   --a, --b WHICH       'new' (root) or 'baseline' [a=new, b=baseline]
+//   --depth N            search depth for both sides [4]
+//   --depth-a/-b N       per-side override
+//   --random-a/-b        use the random player instead of search
+//   --opts K=V,K=V       Search feature flags applied to BOTH sides; any
+//                        public Search field works: useTranspositionTable,
+//                        useIterativeDeepening, useKillerMove, doQuiesce,
+//                        doAlphaBeta, evalDither, ... (values are coerced:
+//                        true/false/numbers)
+//   --opts-a/-b K=V,...  per-side feature flags (merged over --opts)
+//   --max-seconds N      Search time budget, both sides (implies iterative
+//                        deepening; makes results time-dependent, so the
+//                        self-play symmetry alarm is skipped)
+//   --max-seconds-a/-b N per-side time budget
+//   --forced MODE        'both', 'on', or 'off' [both]
+//   --seed N             opening-generator seed [1]
+//   --opening-plies N    random opening plies shared by each game pair [6]
+//   --draw-plies N       plies without progress adjudicated as a draw [50]
+//   --max-plies N        hard game-length cap, adjudicated as a draw [300]
+//   --referee WHICH      'new' or 'baseline' rules govern [new]
+//   --no-verify          skip shadow-replay divergence detection
+//   --verbose            per-game result lines
 
 var path = require('path');
 
@@ -75,16 +96,33 @@ function moveKeySet(game) {
     return game.getMoves().map(function (m) { return m.from + '>' + m.to; }).sort().join(',');
 }
 
-// spec: {engine: 'new'|'baseline', type: 'search'|'random', depth, seed}
+// spec: {engine: 'new'|'baseline', type: 'search'|'random', depth, seed,
+//        maxSeconds, searchOptions: {anyPublicSearchField: value}}
 function makePlayer(spec) {
     var engine = loadEngine(spec.engine);
     var label = spec.engine + (spec.type === 'random' ? ':random' : ':d' + spec.depth);
-    var inner = spec.type === 'random'
-        ? new engine.players.Random(spec.seed || 1)
-        : new engine.players.Search(spec.depth);
+    var inner;
+    if (spec.type === 'random') {
+        inner = new engine.players.Random(spec.seed || 1);
+    } else {
+        inner = new engine.players.Search(spec.depth, spec.maxSeconds);
+        var optKeys = Object.keys(spec.searchOptions || {});
+        optKeys.forEach(function (key) {
+            if (!(key in inner)) {
+                throw new Error("unknown Search option: " + key);
+            }
+            inner[key] = spec.searchOptions[key];
+        });
+        if (optKeys.length || spec.maxSeconds) {
+            label += '[' + optKeys.map(function (k) { return k + '=' + spec.searchOptions[k]; })
+                .concat(spec.maxSeconds ? ['maxSeconds=' + spec.maxSeconds] : [])
+                .join(',') + ']';
+        }
+    }
     return {
         label: label,
         engine: engine,
+        inner: inner,
         genMove: function (state) {
             var game = new engine.checkers.Game(deepCopy(state));
             return inner.genMove(game);
@@ -160,7 +198,15 @@ function playGame(referee, players, opening, opts) {
             return { winner: 0, reason: 'draw-max-plies', plies: ply, divergences: divergences };
         }
         var color = game.turnIsBlack() ? BLACK : RED;
-        var move = players[color].genMove(game.getState());
+        var move;
+        try {
+            move = players[color].genMove(game.getState());
+        } catch (e) {
+            // A crashing player forfeits the game; the match continues and
+            // the error is surfaced as a regression alarm.
+            return { winner: 3 - color, reason: 'player-error', plies: ply, divergences: divergences,
+                playerError: { by: players[color].label, error: String(e && e.message || e) } };
+        }
         if (!move) {
             return { winner: 3 - color, reason: 'no-move-returned', plies: ply, divergences: divergences };
         }
@@ -199,7 +245,7 @@ function playMode(forced, opts) {
     var stats = {
         forced: forced, games: 0, aWins: 0, bWins: 0, draws: 0,
         aWinsAsBlack: 0, aWinsAsRed: 0, bWinsAsBlack: 0, bWinsAsRed: 0,
-        reasons: {}, divergences: [], totalPlies: 0
+        reasons: {}, divergences: [], illegalMoves: [], playerErrors: [], totalPlies: 0
     };
     var pairs = Math.ceil(opts.games / 2);
     for (var p = 0; p < pairs; p++) {
@@ -221,6 +267,14 @@ function playMode(forced, opts) {
                 d.game = stats.games;
                 stats.divergences.push(d);
             });
+            if (result.illegalMove) {
+                result.illegalMove.game = stats.games;
+                stats.illegalMoves.push(result.illegalMove);
+            }
+            if (result.playerError) {
+                result.playerError.game = stats.games;
+                stats.playerErrors.push(result.playerError);
+            }
             var aWon = result.winner === (aIsBlack ? BLACK : RED);
             var bWon = result.winner === (aIsBlack ? RED : BLACK);
             if (aWon) {
@@ -243,15 +297,28 @@ function playMode(forced, opts) {
     return stats;
 }
 
+function specLabel(spec) {
+    return makePlayer(spec).label;
+}
+
 function summarize(stats, opts) {
     var n = stats.games;
     var score = (stats.aWins + 0.5 * stats.draws) / n;
     var se = Math.sqrt(score * (1 - score) / n);
     var lines = [];
     lines.push("=== Forced jumps: " + stats.forced + " ===");
-    lines.push("A=" + opts.a.engine + (opts.a.type === 'random' ? ":random" : ":d" + opts.a.depth) +
-        "  B=" + opts.b.engine + (opts.b.type === 'random' ? ":random" : ":d" + opts.b.depth) +
+    lines.push("A=" + specLabel(opts.a) + "  B=" + specLabel(opts.b) +
         "  referee=" + opts.referee + "  games=" + n);
+    // Regression indicators come first: that is the arena's primary job.
+    var alarmCount = stats.divergences.length + stats.illegalMoves.length + stats.playerErrors.length;
+    lines.push("regression: divergences " + stats.divergences.length +
+        (opts.verify ? "" : " (verify off)") +
+        ", illegal-moves " + stats.illegalMoves.length +
+        ", player-errors " + stats.playerErrors.length +
+        (alarmCount ? "   <<< ALARM" : "   OK"));
+    if (stats.divergences.length) lines.push("  first divergence: " + JSON.stringify(stats.divergences[0]));
+    if (stats.illegalMoves.length) lines.push("  first illegal move: " + JSON.stringify(stats.illegalMoves[0]));
+    if (stats.playerErrors.length) lines.push("  first player error: " + JSON.stringify(stats.playerErrors[0]));
     lines.push("A wins " + stats.aWins + " (black " + stats.aWinsAsBlack + ", red " + stats.aWinsAsRed + ")" +
         "  B wins " + stats.bWins + " (black " + stats.bWinsAsBlack + ", red " + stats.bWinsAsRed + ")" +
         "  draws " + stats.draws);
@@ -261,10 +328,6 @@ function summarize(stats, opts) {
     lines.push("end reasons: " + Object.keys(stats.reasons).map(function (r) {
         return r + " " + stats.reasons[r];
     }).join(", "));
-    if (opts.verify) {
-        lines.push("divergences: " + stats.divergences.length +
-            (stats.divergences.length ? "  FIRST: " + JSON.stringify(stats.divergences[0]) : ""));
-    }
     return lines.join("\n");
 }
 
@@ -278,7 +341,22 @@ function playMatch(opts) {
     ['new', 'baseline'].forEach(function (w) {
         try { loadEngine(w).checkers.setForcedJumps(true); } catch (e) { /* baseline may be absent */ }
     });
-    return { options: opts, results: results };
+    // Regression alarms across all modes.
+    var alarms = [];
+    var mirrorConfigs = JSON.stringify(opts.a) === JSON.stringify(opts.b) &&
+        !opts.a.maxSeconds && !opts.b.maxSeconds; // time budgets are nondeterministic
+    results.forEach(function (stats) {
+        var mode = "forced=" + stats.forced + ": ";
+        stats.divergences.forEach(function (d) { alarms.push(mode + "rules divergence " + JSON.stringify(d)); });
+        stats.illegalMoves.forEach(function (m) { alarms.push(mode + "illegal move " + JSON.stringify(m)); });
+        stats.playerErrors.forEach(function (e) { alarms.push(mode + "player error " + JSON.stringify(e)); });
+        if (mirrorConfigs && (stats.aWins !== stats.bWins ||
+                stats.aWinsAsBlack !== stats.bWinsAsBlack || stats.aWinsAsRed !== stats.bWinsAsRed)) {
+            alarms.push(mode + "self-play asymmetry: identical configs scored A " +
+                stats.aWins + " / B " + stats.bWins + " — determinism regression");
+        }
+    });
+    return { options: opts, results: results, alarms: alarms };
 }
 
 function normalizeOptions(o) {
@@ -300,7 +378,33 @@ function normalizeOptions(o) {
     if (opts.verify == null) {
         opts.verify = opts.a.engine !== opts.b.engine || opts.referee !== opts.a.engine;
     }
+    // Fail fast on typo'd Search options rather than mid-match.
+    makePlayer(opts.a);
+    makePlayer(opts.b);
     return opts;
+}
+
+// "useTranspositionTable=true,evalDither=0" -> {useTranspositionTable: true, evalDither: 0}
+function parseSearchOptions(str) {
+    var options = {};
+    if (!str) return options;
+    str.split(',').forEach(function (pair) {
+        var eq = pair.indexOf('=');
+        if (eq < 1) throw new Error("bad option (expected key=value): " + pair);
+        var key = pair.slice(0, eq).trim();
+        var raw = pair.slice(eq + 1).trim();
+        options[key] = raw === 'true' ? true :
+            raw === 'false' ? false :
+            raw !== '' && !isNaN(Number(raw)) ? Number(raw) : raw;
+    });
+    return options;
+}
+
+function mergeOptions(base, override) {
+    var merged = {};
+    Object.keys(base).forEach(function (k) { merged[k] = base[k]; });
+    Object.keys(override).forEach(function (k) { merged[k] = override[k]; });
+    return merged;
 }
 
 function parseArgs(argv) {
@@ -319,18 +423,25 @@ function parseArgs(argv) {
         }
     }
     var depth = parseInt(flags['depth'] || '4', 10);
+    var sharedOptions = parseSearchOptions(flags['opts']);
     o.games = parseInt(flags['games'] || '100', 10);
     o.a = {
         engine: flags['a'] || 'new',
         type: flags['random-a'] ? 'random' : 'search',
         depth: parseInt(flags['depth-a'] || depth, 10),
-        seed: 101
+        seed: 101,
+        maxSeconds: flags['max-seconds-a'] != null ? parseFloat(flags['max-seconds-a']) :
+            flags['max-seconds'] != null ? parseFloat(flags['max-seconds']) : undefined,
+        searchOptions: mergeOptions(sharedOptions, parseSearchOptions(flags['opts-a']))
     };
     o.b = {
         engine: flags['b'] || 'baseline',
         type: flags['random-b'] ? 'random' : 'search',
         depth: parseInt(flags['depth-b'] || depth, 10),
-        seed: 202
+        seed: 202,
+        maxSeconds: flags['max-seconds-b'] != null ? parseFloat(flags['max-seconds-b']) :
+            flags['max-seconds'] != null ? parseFloat(flags['max-seconds']) : undefined,
+        searchOptions: mergeOptions(sharedOptions, parseSearchOptions(flags['opts-b']))
     };
     var forced = flags['forced'] || 'both';
     o.forcedModes = forced === 'both' ? [true, false] :
@@ -350,6 +461,8 @@ if (require.main === module) {
     var opts;
     try {
         opts = parseArgs(process.argv.slice(2));
+        makePlayer(opts.a); // clean fail-fast on typo'd Search options
+        makePlayer(opts.b);
     } catch (e) {
         console.error(e.message);
         process.exit(2);
@@ -359,9 +472,10 @@ if (require.main === module) {
         console.log(summarize(stats, match.options));
         console.log("");
     });
-    var totalDivergences = match.results.reduce(function (sum, s) { return sum + s.divergences.length; }, 0);
-    if (totalDivergences > 0) {
-        console.log("WARNING: " + totalDivergences + " rules divergence(s) between engine versions — see above.");
+    if (match.alarms.length > 0) {
+        console.log("REGRESSION ALARMS (" + match.alarms.length + "):");
+        match.alarms.slice(0, 10).forEach(function (a) { console.log("  " + a); });
+        if (match.alarms.length > 10) console.log("  ... and " + (match.alarms.length - 10) + " more");
         process.exitCode = 1;
     }
 }
