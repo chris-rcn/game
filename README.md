@@ -16,7 +16,17 @@ Original site files (unmodified):
 | `players.js` | Players: random rollouts and a negamax search with alpha-beta, quiescence, iterative deepening |
 | `checkersUi.js` | Canvas UI (browser only) |
 | `board.jpg` | Board artwork |
-| `end8Forced`, `end8Unforced` | Endgame tablebases — legacy 9-byte and newer capacity-padded 8-byte formats respectively; both readable after the BUGS.md #3 fix |
+| `end8Forced`, `end8Unforced` | Endgame tablebases in the v3 "CHFT" headered format (converted from the site originals; 11% and 8x smaller respectively) |
+| `testdata/end8Forced.legacy`, `testdata/end8Unforced.padded` | The original site downloads, kept as fixtures for the legacy 9-byte and capacity-padded 8-byte reader paths |
+| `tools/convert-tablebase.js` | Converts any supported tablebase format to v3 (verifies entry-for-entry before writing) |
+
+Tablebase v3 format: 16-byte header (`CHFT` magic, u32 version, u32 entryCount,
+u32 flags with bit 0 = forced-jumps mode) followed by exact-sized arrays
+`u32 h0[n] | u16 (h1>>>16)[n] | u8 (h1&0xFF)[n] | u8 resultAndDist[n]`.
+It combines the legacy format's exact sizing with the newer format's leaner
+8-byte entries, and the header makes detection unambiguous, catches truncation,
+and lets the UI refuse a tablebase generated for the wrong rules mode.
+`ResultList2` reads all three formats.
 
 Added in this repo:
 

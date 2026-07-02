@@ -357,6 +357,11 @@ CHF.checkers.ui = function() {
                 log("Tablebase '{}' rejected: {}", fileName, e.message);
                 return;
             }
+            var tbForced = tb.getStats().forcedJumps;
+            if (tbForced !== null && tbForced !== forced) {
+                log("Tablebase '{}' is for forcedJumps={}, expected {}; ignoring.", fileName, tbForced, forced);
+                return;
+            }
             log("Loaded tablebase '{}' with {} entries.", fileName, tb.getStats().size);
             tablebases[forced] = tb;
             if (checkers.getForcedJumps() === forced) {

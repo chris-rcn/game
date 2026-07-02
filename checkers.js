@@ -106,13 +106,46 @@ CHF.checkers = function() {
     }
     pub.getBoardSize = getBoardSize;
 
+    // Tablebase v3 ("CHFT"): 16-byte header — magic 'CHFT', u32 version=1,
+    // u32 entryCount, u32 flags (bit0 = jumpsAreForced) — followed by
+    // exact-sized arrays: u32 h0[n] | u16 (h1>>>16)[n] | u8 (h1&0xFF)[n] |
+    // u8 resultAndDist[n].  All little-endian.
+    var TB_MAGIC = 0x54464843; // 'C','H','F','T' little-endian
+    var TB_VERSION = 1;
+    var TB_HEADER_BYTES = 16;
+    var TB_FLAG_FORCED = 1;
+
     function ResultList2(buffer, byteLength) {
         var pub = this;
         if (byteLength == null) {
             byteLength = buffer.byteLength;
         }
-        var size, h0Array, resultAndDistArray, matchesH1;
-        if (byteLength % 9 === 0) {
+        var size, h0Array, resultAndDistArray, matchesH1, entryAt;
+        var flags = null;
+        var header = byteLength >= TB_HEADER_BYTES ? new Uint32Array(buffer, 0, 4) : null;
+        if (header && header[0] === TB_MAGIC) {
+            // v3 headered layout.
+            if (header[1] !== TB_VERSION) {
+                throw new Error(fmt("Unsupported tablebase version {}", header[1]));
+            }
+            size = header[2];
+            flags = header[3];
+            if (byteLength !== TB_HEADER_BYTES + 8*size) {
+                throw new Error(fmt("Tablebase header says {} entries but file has {} bytes",
+                    size, byteLength));
+            }
+            h0Array = new Uint32Array(buffer, TB_HEADER_BYTES, size);
+            var v3HiArray = new Uint16Array(buffer, TB_HEADER_BYTES + 4*size, size);
+            var v3LoArray = new Uint8Array(buffer, TB_HEADER_BYTES + 6*size, size);
+            resultAndDistArray = new Uint8Array(buffer, TB_HEADER_BYTES + 7*size, size);
+            matchesH1 = function (i, h1) {
+                return v3HiArray[i] === ((h1 >>> 16) & 0xFFFF) && v3LoArray[i] === (h1 & 0xFF);
+            };
+            entryAt = function (i) {
+                return { h0: h0Array[i], h1Hi: v3HiArray[i], h1Lo: v3LoArray[i],
+                    resultAndDist: resultAndDistArray[i] };
+            };
+        } else if (byteLength % 9 === 0) {
             // Legacy layout: u32 h0 | u32 h1 | u8 resultAndDist, fully used.
             size = byteLength / 9;
             h0Array = new Uint32Array(buffer, 0, size);
@@ -120,6 +153,10 @@ CHF.checkers = function() {
             resultAndDistArray = new Uint8Array(buffer, 8*size, size);
             matchesH1 = function (i, h1) {
                 return h1Array[i] === h1;
+            };
+            entryAt = function (i) {
+                return { h0: h0Array[i], h1Hi: (h1Array[i] >>> 16) & 0xFFFF,
+                    h1Lo: h1Array[i] & 0xFF, resultAndDist: resultAndDistArray[i] };
             };
         } else if (byteLength % 8 === 0) {
             // Capacity-padded layout: u32 h0 | u16 (h1>>>16) | u8 (h1&0xFF) |
@@ -137,17 +174,29 @@ CHF.checkers = function() {
             matchesH1 = function (i, h1) {
                 return h1HiArray[i] === ((h1 >>> 16) & 0xFFFF) && h1LoArray[i] === (h1 & 0xFF);
             };
+            entryAt = function (i) {
+                return { h0: h0Array[i], h1Hi: h1HiArray[i], h1Lo: h1LoArray[i],
+                    resultAndDist: resultAndDistArray[i] };
+            };
         } else {
             throw new Error(fmt(
-                "Unrecognized tablebase format: {} bytes is divisible by neither 9 (legacy) nor 8 (capacity-padded)",
+                "Unrecognized tablebase format: no CHFT header and {} bytes is divisible by neither 9 (legacy) nor 8 (capacity-padded)",
                 byteLength));
         }
         var maxObservedCheckerCount = 0;
 
         function getStats() {
-            return { size: size };
+            return {
+                size: size,
+                forcedJumps: flags === null ? null : (flags & TB_FLAG_FORCED) !== 0
+            };
         }
         pub.getStats = getStats;
+
+        pub.entryAt = function (i) {
+            assert(i >= 0 && i < size, "entryAt out of range");
+            return entryAt(i);
+        };
 
         function getMaxObservedCheckerCount() {
             return maxObservedCheckerCount;
@@ -185,6 +234,31 @@ CHF.checkers = function() {
         pub.getEntry = getEntry;
     }
     pub.ResultList2 = ResultList2;
+
+    // entries: [{h0, h1Hi, h1Lo, resultAndDist}] sorted by h0 ascending.
+    function buildTablebaseV3(entries, forcedJumps) {
+        var n = entries.length;
+        var buffer = new ArrayBuffer(TB_HEADER_BYTES + 8*n);
+        var header = new Uint32Array(buffer, 0, 4);
+        header[0] = TB_MAGIC;
+        header[1] = TB_VERSION;
+        header[2] = n;
+        header[3] = forcedJumps ? TB_FLAG_FORCED : 0;
+        var h0 = new Uint32Array(buffer, TB_HEADER_BYTES, n);
+        var hi = new Uint16Array(buffer, TB_HEADER_BYTES + 4*n, n);
+        var lo = new Uint8Array(buffer, TB_HEADER_BYTES + 6*n, n);
+        var rd = new Uint8Array(buffer, TB_HEADER_BYTES + 7*n, n);
+        for (var i=0; i<n; i++) {
+            var e = entries[i];
+            assert(i === 0 || e.h0 >= entries[i-1].h0, "entries must be sorted by h0");
+            h0[i] = e.h0;
+            hi[i] = e.h1Hi;
+            lo[i] = e.h1Lo;
+            rd[i] = e.resultAndDist;
+        }
+        return buffer;
+    }
+    pub.buildTablebaseV3 = buildTablebaseV3;
 
     function genZobristData(seed) {
         var rand = new common.Random(seed);

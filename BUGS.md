@@ -92,6 +92,19 @@ Fixes in the root copy:
 
 The old reader remains in `baseline/checkers.js`.
 
+**Follow-up: v3 "CHFT" format.** Both shipped files were converted to a new
+headered format combining the strengths of the two older ones: a 16-byte header
+(`CHFT` magic, u32 version, u32 entryCount, u32 flags with bit 0 = forced-jumps
+mode) followed by the 8-byte-per-entry arrays at exact size — no padding. The
+header makes detection unambiguous (both older formats were detected only by
+byte-length divisibility, which is fragile and ambiguous for lengths divisible
+by 72), catches truncation via the count check, and lets `loadTablebase` refuse
+a tablebase whose rules mode doesn't match. Results: `end8Forced` 2,432,286 →
+2,162,048 bytes (−11%), `end8Unforced` 14,725,120 → 1,840,656 bytes (−87.5%).
+The originals are preserved under `testdata/` as reader fixtures, and
+`tools/convert-tablebase.js` converts any supported format with entry-for-entry
+verification before writing.
+
 ### 4. `players.Search` transposition table reuses under-searched entries — `players.js:101` — **FIXED in root copy**
 `ttEntry.d` stored the node's **distance from the root**, and the reuse condition was
 `ttEntry.d >= depth`. Larger distance-from-root means *less* remaining search depth,

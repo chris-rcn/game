@@ -70,22 +70,26 @@ test('ResultList2 with an empty buffer returns null', function () {
     assert.strictEqual(tb.getEntry({ h0: 1, h1: 1 }, 2), null);
 });
 
+// Canonical shipped files are v3; the original site downloads are kept as
+// fixtures for the legacy and capacity-padded reader paths.
 var forcedPath = path.join(__dirname, '..', 'end8Forced');
 var unforcedPath = path.join(__dirname, '..', 'end8Unforced');
+var legacyFixturePath = path.join(__dirname, '..', 'testdata', 'end8Forced.legacy');
+var paddedFixturePath = path.join(__dirname, '..', 'testdata', 'end8Unforced.padded');
 
 function loadBuffer(p) {
     var b = fs.readFileSync(p);
     return b.buffer.slice(b.byteOffset, b.byteOffset + b.byteLength);
 }
 
-test('shipped end8Forced tablebase loads and is sorted by (h0, h1)',
-    { skip: !fs.existsSync(forcedPath) && 'end8Forced not present' },
+test('legacy end8Forced fixture loads and is sorted by (h0, h1)',
+    { skip: !fs.existsSync(legacyFixturePath) && 'fixture not present' },
     function () {
-        var tb = new checkers.ResultList2(loadBuffer(forcedPath));
+        var tb = new checkers.ResultList2(loadBuffer(legacyFixturePath));
         var size = tb.getStats().size;
         assert.ok(size > 0);
         // Verify the sort invariant getEntry's binary search depends on.
-        var buffer = loadBuffer(forcedPath);
+        var buffer = loadBuffer(legacyFixturePath);
         var h0 = new Uint32Array(buffer, 0, size);
         var h1 = new Uint32Array(buffer, 4 * size, size);
         for (var i = 1; i < size; i++) {
@@ -95,7 +99,7 @@ test('shipped end8Forced tablebase loads and is sorted by (h0, h1)',
     });
 
 test('ResultList2 lookups agree exactly with baseline after the binarySearch fix (BUG #1)',
-    { skip: !fs.existsSync(forcedPath) && 'end8Forced not present' },
+    { skip: !fs.existsSync(legacyFixturePath) && 'fixture not present' },
     function () {
         // getEntry survived the old ambiguous-zero return only because it
         // re-checks h0Array[i]; this proves the convention change is
@@ -104,10 +108,10 @@ test('ResultList2 lookups agree exactly with baseline after the binarySearch fix
         // both implementations in the same state.
         var common = require('../common.js');
         var baseline = require('../baseline/checkers.js');
-        var tbNew = new checkers.ResultList2(loadBuffer(forcedPath));
-        var tbOld = new baseline.ResultList2(loadBuffer(forcedPath));
+        var tbNew = new checkers.ResultList2(loadBuffer(legacyFixturePath));
+        var tbOld = new baseline.ResultList2(loadBuffer(legacyFixturePath));
         var size = tbNew.getStats().size;
-        var buffer = loadBuffer(forcedPath);
+        var buffer = loadBuffer(legacyFixturePath);
         var h0 = new Uint32Array(buffer, 0, size);
         var h1 = new Uint32Array(buffer, 4 * size, size);
         var rand = new common.Random(23);
@@ -169,11 +173,11 @@ test('ResultList2 rejects buffers matching neither layout', function () {
     }, /Unrecognized tablebase format/);
 });
 
-test('shipped end8Unforced loads via the capacity-padded format and agrees with the engine (BUG #3, fixed)',
-    { skip: !fs.existsSync(unforcedPath) && 'end8Unforced not present' },
+test('padded end8Unforced fixture loads and agrees with the engine (BUG #3, fixed)',
+    { skip: !fs.existsSync(paddedFixturePath) && 'fixture not present' },
     function () {
         var common = require('../common.js');
-        var tb = new checkers.ResultList2(loadBuffer(unforcedPath));
+        var tb = new checkers.ResultList2(loadBuffer(paddedFixturePath));
         assert.strictEqual(tb.getStats().size, 230080);
 
         // Oracle probe: real unforced endgame positions must decode to sane
@@ -247,4 +251,102 @@ test('Search uses the unforced tablebase for exact endgame values',
         checkers.setForcedJumps(true);
         assert.ok(detail.value > 0.9,
             "search should confirm the tablebase win, got " + detail.value);
+    });
+
+// ---- v3 "CHFT" headered format ----
+
+test('buildTablebaseV3 / ResultList2 v3 round trip with flags', function () {
+    var entries = [
+        { h0: 100, h1Hi: 0x7fff, h1Lo: 0xaa, resultAndDist: ((1 + 1) << 6) | 3 },
+        { h0: 100, h1Hi: 0x0001, h1Lo: 0xbb, resultAndDist: ((-1 + 1) << 6) | 2 },
+        { h0: 200, h1Hi: 0x1234, h1Lo: 0x78, resultAndDist: ((0 + 1) << 6) | 0 }
+    ];
+    [true, false].forEach(function (forced) {
+        var tb = new checkers.ResultList2(checkers.buildTablebaseV3(entries, forced));
+        assert.strictEqual(tb.getStats().size, 3);
+        assert.strictEqual(tb.getStats().forcedJumps, forced);
+        assert.deepStrictEqual(tb.getEntry({ h0: 100, h1: 0x7fff00aa }, 4), { v: 1, d: 3 });
+        assert.deepStrictEqual(tb.getEntry({ h0: 100, h1: 0x000100bb }, 4), { v: -1, d: 2 });
+        assert.deepStrictEqual(tb.getEntry({ h0: 200, h1: 0x12345678 }, 4), { v: 0, d: 0 });
+        assert.strictEqual(tb.getEntry({ h0: 100, h1: 0x7ffe00aa }, 4), null, "h1 high bits mismatch");
+        assert.strictEqual(tb.getEntry({ h0: 150, h1: 1 }, 4), null);
+        assert.deepStrictEqual(tb.entryAt(0), entries[0]);
+        assert.deepStrictEqual(tb.entryAt(2), entries[2]);
+    });
+    // Empty v3 file is valid.
+    var empty = new checkers.ResultList2(checkers.buildTablebaseV3([], true));
+    assert.strictEqual(empty.getStats().size, 0);
+    assert.strictEqual(empty.getEntry({ h0: 1, h1: 1 }, 2), null);
+});
+
+test('v3 reader rejects bad version and inconsistent entry counts', function () {
+    var good = checkers.buildTablebaseV3(
+        [{ h0: 1, h1Hi: 2, h1Lo: 3, resultAndDist: 64 }], true);
+    var badVersion = good.slice(0);
+    new Uint32Array(badVersion, 0, 4)[1] = 99;
+    assert.throws(function () { new checkers.ResultList2(badVersion); },
+        /Unsupported tablebase version/);
+    var badCount = good.slice(0);
+    new Uint32Array(badCount, 0, 4)[2] = 7;
+    assert.throws(function () { new checkers.ResultList2(badCount); },
+        /header says 7 entries/);
+    assert.throws(function () {
+        checkers.buildTablebaseV3([
+            { h0: 5, h1Hi: 0, h1Lo: 0, resultAndDist: 64 },
+            { h0: 4, h1Hi: 0, h1Lo: 0, resultAndDist: 64 }
+        ], true);
+    }, /sorted/);
+});
+
+test('entryAt presents a uniform 23-bit view across all three formats', function () {
+    var legacy = new checkers.ResultList2(buildTablebase([{ h0: 9, h1: 0x7abc12ef, v: 1, d: 5 }]));
+    assert.deepStrictEqual(legacy.entryAt(0),
+        { h0: 9, h1Hi: 0x7abc, h1Lo: 0xef, resultAndDist: ((1 + 1) << 6) | 5 });
+    var padded = new checkers.ResultList2(buildPaddedTablebase([{ h0: 9, h1: 0x7abc12ef, v: 1, d: 5 }], 4));
+    assert.deepStrictEqual(padded.entryAt(0), legacy.entryAt(0));
+});
+
+test('convertBuffer produces lookup-identical v3 tables from both older formats', function () {
+    var convert = require('../tools/convert-tablebase.js');
+    var entries = [
+        { h0: 100, h1: 0x7fff00aa, v: 1, d: 3 },
+        { h0: 100, h1: 0x000100bb, v: -1, d: 2 },
+        { h0: 200, h1: 0x12345678, v: 0, d: 7 }
+    ];
+    [buildTablebase(entries), buildPaddedTablebase(entries, 11)].forEach(function (srcBuffer) {
+        var v3 = new checkers.ResultList2(convert.convertBuffer(srcBuffer, false));
+        var src = new checkers.ResultList2(srcBuffer);
+        assert.strictEqual(v3.getStats().size, src.getStats().size);
+        assert.strictEqual(v3.getStats().forcedJumps, false);
+        entries.forEach(function (e) {
+            assert.deepStrictEqual(
+                v3.getEntry({ h0: e.h0, h1: e.h1 }, 4),
+                src.getEntry({ h0: e.h0, h1: e.h1 }, 4));
+        });
+        assert.strictEqual(v3.getEntry({ h0: 100, h1: 0x7ffe00aa }, 4), null);
+    });
+});
+
+test('canonical v3 files match their source fixtures entry-for-entry',
+    { skip: !(fs.existsSync(forcedPath) && fs.existsSync(legacyFixturePath) &&
+              fs.existsSync(unforcedPath) && fs.existsSync(paddedFixturePath)) && 'files not present' },
+    function () {
+        [
+            { v3: forcedPath, fixture: legacyFixturePath, forced: true, count: 270254 },
+            { v3: unforcedPath, fixture: paddedFixturePath, forced: false, count: 230080 }
+        ].forEach(function (pair) {
+            var tbV3 = new checkers.ResultList2(loadBuffer(pair.v3));
+            var tbSrc = new checkers.ResultList2(loadBuffer(pair.fixture));
+            assert.strictEqual(tbV3.getStats().size, pair.count);
+            assert.strictEqual(tbSrc.getStats().size, pair.count);
+            assert.strictEqual(tbV3.getStats().forcedJumps, pair.forced);
+            for (var i = 0; i < pair.count; i++) {
+                var a = tbV3.entryAt(i), b = tbSrc.entryAt(i);
+                if (a.h0 !== b.h0 || a.h1Hi !== b.h1Hi || a.h1Lo !== b.h1Lo ||
+                        a.resultAndDist !== b.resultAndDist) {
+                    assert.fail(pair.v3 + " entry " + i + " differs: " +
+                        JSON.stringify(a) + " vs " + JSON.stringify(b));
+                }
+            }
+        });
     });
