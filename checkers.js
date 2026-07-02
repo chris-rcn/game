@@ -111,10 +111,37 @@ CHF.checkers = function() {
         if (byteLength == null) {
             byteLength = buffer.byteLength;
         }
-        var size = byteLength / (4+4+1);
-        var h0Array = new Uint32Array(buffer, 0, size);
-        var h1Array = new Uint32Array(buffer, 4*size, size);
-        var resultAndDistArray = new Uint8Array(buffer, 8*size, size);
+        var size, h0Array, resultAndDistArray, matchesH1;
+        if (byteLength % 9 === 0) {
+            // Legacy layout: u32 h0 | u32 h1 | u8 resultAndDist, fully used.
+            size = byteLength / 9;
+            h0Array = new Uint32Array(buffer, 0, size);
+            var h1Array = new Uint32Array(buffer, 4*size, size);
+            resultAndDistArray = new Uint8Array(buffer, 8*size, size);
+            matchesH1 = function (i, h1) {
+                return h1Array[i] === h1;
+            };
+        } else if (byteLength % 8 === 0) {
+            // Capacity-padded layout: u32 h0 | u16 (h1>>>16) | u8 (h1&0xFF) |
+            // u8 resultAndDist, each array allocated for `capacity` entries;
+            // the used prefix is sorted by h0 and the rest is zero-filled.
+            var capacity = byteLength / 8;
+            h0Array = new Uint32Array(buffer, 0, capacity);
+            var h1HiArray = new Uint16Array(buffer, 4*capacity, capacity);
+            var h1LoArray = new Uint8Array(buffer, 6*capacity, capacity);
+            resultAndDistArray = new Uint8Array(buffer, 7*capacity, capacity);
+            size = capacity;
+            while (size > 0 && h0Array[size-1] === 0) {
+                size--; // trailing zeros are padding (a real h0 of 0 would sort first)
+            }
+            matchesH1 = function (i, h1) {
+                return h1HiArray[i] === ((h1 >>> 16) & 0xFFFF) && h1LoArray[i] === (h1 & 0xFF);
+            };
+        } else {
+            throw new Error(fmt(
+                "Unrecognized tablebase format: {} bytes is divisible by neither 9 (legacy) nor 8 (capacity-padded)",
+                byteLength));
+        }
         var maxObservedCheckerCount = 0;
 
         function getStats() {
@@ -138,17 +165,16 @@ CHF.checkers = function() {
             if (size === 0) {
                 return null;
             }
-            var i = common.binarySearch(h0Array, hash.h0);
+            var i = common.binarySearch(h0Array, hash.h0, size);
             if (i >= 0) {
                 while (h0Array[i-1] === hash.h0) i--; // binarySearch might not return the first one.
-                while (h0Array[i] === hash.h0 && h1Array[i] < hash.h1) {
-                    i++;
-                }
-                if (h0Array[i] === hash.h0 && h1Array[i] === hash.h1) {
-                    if (checkerCount > maxObservedCheckerCount) {
-                        maxObservedCheckerCount = checkerCount;
+                for (; i < size && h0Array[i] === hash.h0; i++) {
+                    if (matchesH1(i, hash.h1)) {
+                        if (checkerCount > maxObservedCheckerCount) {
+                            maxObservedCheckerCount = checkerCount;
+                        }
+                        return decode(resultAndDistArray[i]);
                     }
-                    return decode(resultAndDistArray[i]);
                 }
             }
             if (checkerCount < maxObservedCheckerCount) {

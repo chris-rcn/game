@@ -16,7 +16,7 @@ Original site files (unmodified):
 | `players.js` | Players: random rollouts and a negamax search with alpha-beta, quiescence, iterative deepening |
 | `checkersUi.js` | Canvas UI (browser only) |
 | `board.jpg` | Board artwork |
-| `end8Forced`, `end8Unforced` | Endgame tablebases (see BUGS.md #3 — the unforced one is unloadable as shipped) |
+| `end8Forced`, `end8Unforced` | Endgame tablebases — legacy 9-byte and newer capacity-padded 8-byte formats respectively; both readable after the BUGS.md #3 fix |
 
 Added in this repo:
 

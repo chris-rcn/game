@@ -51,15 +51,46 @@ the `liveTileCount`/`maxCheckers`/`maxCheckersPerPlayer` constants only it used.
 `seed()` at init, though nothing in the engine consumes the seeded stream anymore.
 The function survives unchanged in `baseline/checkers.js`.
 
-### 3. Shipped `end8Unforced` tablebase cannot be loaded — data file + `checkers.js:113`
-`ResultList2` requires `byteLength` divisible by 9 (two `Uint32` hashes + one byte
+### 3. Shipped `end8Unforced` tablebase cannot be loaded — data file + `checkers.js:113` — **FIXED in root copy**
+`ResultList2` required `byteLength` divisible by 9 (two `Uint32` hashes + one byte
 per entry). The published `end8Unforced` is 14,725,120 bytes (not divisible by 9),
-so `size` is fractional and `new Uint32Array(buffer, 4*size, size)` throws
-`RangeError`. In the browser this exception fires inside the XHR `onload` handler,
-so switching off "Forced jumps" silently plays without its endgame tablebase.
-`end8Forced` (2,432,286 bytes) loads fine and is correctly sorted. Related hardening
-gap: `loadTablebase` in `checkersUi.js` never checks `request.status`, so an HTTP
-error page would be fed to `ResultList2` the same way.
+so `size` was fractional and `new Uint32Array(buffer, 4*size, size)` threw
+`RangeError` inside the XHR `onload` handler — switching off "Forced jumps"
+silently played without its endgame tablebase. `end8Forced` (2,432,286 bytes)
+loads fine in the legacy format.
+
+**Forensic result: the file is not corrupt — it is a newer format the site's
+reader predates.** Layout (verified against the engine's own Zobrist hashes on
+150/150 real endgame positions):
+
+| array | offset | type | content |
+|---|---|---|---|
+| h0 | 0 | `u32 × capacity` | first hash, sorted over the used prefix |
+| h1-hi | 4·cap | `u16 × capacity` | `h1 >>> 16` |
+| h1-lo | 6·cap | `u8 × capacity` | `h1 & 0xFF` |
+| result | 7·cap | `u8 × capacity` | `((v+1) << 6) | distance` (unchanged encoding) |
+
+with `capacity = byteLength/8 = 1,840,640` and `used = 230,080` (exactly 1/8
+full; the rest is zero padding — the sorted-h0-prefix scan that revealed this is
+reproducible from the file alone). Census: 150,186 wins, 79,894 losses, **zero
+draws, zero invalid bytes**, max distance 47. Draws are deliberately absent —
+`getEntry`'s "miss below the observed checker count ⇒ draw" heuristic is the
+other half of this design. Win/loss distances are not ply-parity-clean because
+multi-jump continuations advance the counter without switching the mover.
+
+Fixes in the root copy:
+- `ResultList2` auto-detects the layout (`%9` → legacy, `%8` → capacity-padded,
+  else a descriptive `Error` instead of a deep `RangeError`), trims the zero
+  padding, and matches the 23 stored h1 bits in the new format.
+- `loadTablebase` in `checkersUi.js` now checks `request.status`, catches reader
+  errors, and logs instead of dying inside the event handler.
+- Bonus latent bug found while there: the original install condition
+  `if (checkers.getForcedJumps())` would have installed **whichever tablebase
+  finished loading last** while in forced mode (e.g. the unforced one) — it was
+  masked only because the unforced file always threw. Now installs only when the
+  loaded tablebase matches the current mode (`getForcedJumps() === forced`).
+
+The old reader remains in `baseline/checkers.js`.
 
 ### 4. `players.Search` transposition table reuses under-searched entries — `players.js:101` — **FIXED in root copy**
 `ttEntry.d` stored the node's **distance from the root**, and the reuse condition was

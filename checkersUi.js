@@ -346,10 +346,20 @@ CHF.checkers.ui = function() {
         request.open("GET", fileName, true);
         request.responseType = "arraybuffer";
         request.onload = function () {
-            var tb = new checkers.ResultList2(request.response);
+            if (request.status !== 200) {
+                log("Tablebase '{}' unavailable (HTTP {}); playing without it.", fileName, request.status);
+                return;
+            }
+            var tb;
+            try {
+                tb = new checkers.ResultList2(request.response);
+            } catch (e) {
+                log("Tablebase '{}' rejected: {}", fileName, e.message);
+                return;
+            }
             log("Loaded tablebase '{}' with {} entries.", fileName, tb.getStats().size);
             tablebases[forced] = tb;
-            if (checkers.getForcedJumps()) {
+            if (checkers.getForcedJumps() === forced) {
                 player.tablebase = tb;
             }
         };
