@@ -117,33 +117,6 @@ CHF.common = function () {
     };
     pub.Random = Random;
 
-    // Shuffles in blocks of 10K.  Slower, obviously.  Totally untested.
-    function SuperRandom(seed) {
-        this.rand = new Random(seed);
-        this.rands = new Array(10000);
-        this.fill();
-    }
-    SuperRandom.prototype.fill = function () {
-        for (var i=0; i<10000; i++) {
-            this.rands[i] = this.rand.next31();
-        }
-        shuffle(this.rands, this);
-        this.index = 0;
-    };
-    SuperRandom.prototype.next31 = function () {
-        if (this.index === 10000) {
-            this.fill();
-        }
-        return this.rands[this.index++];
-    };
-    SuperRandom.prototype.float = function () {
-        return this.next31() / 2147483648;
-    };
-    SuperRandom.prototype.int = function (maxExclusive) {
-        return Math.floor(maxExclusive * this.float());
-    };
-    pub.Random = Random;
-
     function formatNumber(number, length, decimals) {
         if (typeof number !== "number") return number;
         var rounded = round(number, decimals);

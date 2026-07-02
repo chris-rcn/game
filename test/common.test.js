@@ -124,12 +124,13 @@ test('binarySearch found/miss property over a randomized array', function () {
     }
 });
 
-test('KNOWN BUG #2: SuperRandom is never exported',
-    { todo: 'common.js line 145 re-assigns pub.Random = Random instead of pub.SuperRandom = SuperRandom, ' +
-            'so the SuperRandom class is unreachable by consumers.' },
-    function () {
-        assert.strictEqual(typeof common.SuperRandom, 'function');
-    });
+test('SuperRandom has been removed (BUG #8 resolved by removal); Random export intact', function () {
+    // The class was never exported (a copy-paste `pub.Random = Random` where
+    // `pub.SuperRandom` was intended), never used, and self-described as
+    // "Totally untested" — deleted rather than shipped untested.
+    assert.strictEqual(common.SuperRandom, undefined);
+    assert.strictEqual(typeof common.Random, 'function');
+});
 
 test('autoScaleFormat basic shapes', function () {
     assert.strictEqual(common.autoScaleFormat(0), "   0");

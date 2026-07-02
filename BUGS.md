@@ -124,10 +124,13 @@ pruning still eliminates 95-99.9% of leaf evaluations. The suite enforces exact
 equality (`===`) on a pinned position and a seeded batch. The bug remains in
 `baseline/players.js` and `snapshots/after-killer-fix/` for arena comparison.
 
-### 8. `common.SuperRandom` is never exported — `common.js:145`
-The line after the class definition reads `pub.Random = Random;` (a duplicate of
+### 8. `common.SuperRandom` is never exported — `common.js:145` — **RESOLVED by removal**
+The line after the class definition read `pub.Random = Random;` (a duplicate of
 line 118) where `pub.SuperRandom = SuperRandom;` was clearly intended, so the class
-is unreachable. (Its own comment admits "Totally untested".)
+was unreachable. Its own comment admitted "Totally untested", nothing used it (its
+one dependency, `shuffle`, is shared and stays), and exporting untested dead code
+adds surface without value — so the class and the duplicate export line were
+**removed** from the root copy. It survives unchanged in `baseline/common.js`.
 
 ### 9. Jump continuation is forced even when "Forced jumps" is off — `checkers.js:506,662`
 With `jumpsAreForced = false` a player may decline to start a jump, but once a
