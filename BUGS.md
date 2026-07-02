@@ -213,14 +213,16 @@ coordinated change: a UI end-turn gesture (e.g. clicking the jumping piece), an
 explicit end-turn action in the engine's mid-chain move set, search support for
 the stop option, and regeneration of any unforced tablebase.
 
-### 10. UI animation timer runs ~11x too fast — `checkersUi.js:25`
+### 10. UI animation timer runs ~11x too fast — `checkersUi.js:25` — **FIXED in root copy**
 ```js
 var animationFrames = 1000 * animationFramesPerSec / animationPeriodMs; // 66.7
 var animationFramePeriodMs = animationPeriodMs / animationFrames;       // 4.5ms
 ```
 For 20 fps over a 300 ms animation, that should be `6` frames at `50` ms. The two
-errors cancel so the animation still lasts 300 ms, but `setInterval(animate, 4.5)`
-redraws at ~220 Hz instead of 20 Hz, burning CPU for nothing.
+errors cancelled so the animation still lasted 300 ms, but `setInterval(animate, 4.5)`
+redrew at ~220 Hz instead of 20 Hz, burning CPU for nothing. Fixed during the
+cleanup pass: frames = period × fps / 1000, frame period = 1000 / fps; the
+animation duration is unchanged.
 
 ### 11. Quiescence search never runs in unforced mode — `players.js:142` — **FIXED in root copy**
 The "keep searching, this position is noisy" test was
@@ -254,22 +256,35 @@ because the other search bugs are gated off by default (#4 needs
 `useTranspositionTable`, #5 needs iterative deepening) or are ~1e-5 noise (#7).
 The bug remains present in `baseline/players.js` for arena comparison.
 
-## Minor notes (no tests)
+## Minor notes
 
-- `checkersUi.js:112` — `if (selectedLocation >= 0)` is true for `null`
-  (`null >= 0` is `true` in JS); it only escapes notice because the resulting
-  highlight rect lands off-canvas.
-- `checkers.js:578` (`hasJump`) and `:605` (`hasSlide`) loop over 4 directions even
-  for pawns whose diagonal arrays have length 2; the reads of `diags[2]`/`diags[3]`
-  yield `undefined`, producing `NaN` board lookups that happen to be harmless.
-- `common.format` uses `String.replace` with a literal pattern, so argument values
-  containing `$&`, `$'` etc. are expanded as replacement patterns
-  (`format("{}", "$&")` returns `"{}"`).
-- `negamax` sets `result.valueIsKnown = false` on a TT_EXACT hit (`players.js:104`),
+- ~~`checkersUi.js:112` — `if (selectedLocation >= 0)` is true for `null`~~
+  **FIXED** in cleanup: now `selectedLocation !== null`.
+- ~~`hasJump`/`hasSlide` loop over 4 directions even for pawns~~ **FIXED** in
+  cleanup: loops now use `diags.length`; the `undefined`-diagonal reads (harmless
+  `NaN` lookups) are gone.
+- ~~`common.format` expands `$&`-style replacement patterns in argument values~~
+  **FIXED** in cleanup: a function replacement keeps values literal (tested).
+- ~~`checkers.getTablebaseFileName()` returns a `pub/` path the UI never uses~~
+  **REMOVED** in cleanup (unused; the UI builds its own name).
+- `negamax` sets `result.valueIsKnown = false` on a TT_EXACT hit (`players.js`),
   which looks like it should be `true`; the field is only consumed internally.
-- `negamax`'s depth-0 single-move shortcut returns a result with **no `value`**
-  (`players.js:152-156`), so `genMoveDetail(...).value` is `undefined` whenever the
-  root move is forced — callers must not rely on it.
-- `checkers.getTablebaseFileName()` returns `pub/end8...` while the UI loads
-  `./end8...`; the copy in `checkersUi.js:345` duplicates the format string instead
-  of calling the engine function.
+  Left as-is.
+- `negamax`'s depth-0 single-move shortcut returns a result with **no `value`**,
+  so `genMoveDetail(...).value` is `undefined` whenever the root move is forced —
+  callers must not rely on it. Left as-is (documented behavior).
+
+## Cleanup pass (behavior-neutral)
+
+Applied after all bugs were resolved; verified by the full suite plus an arena
+bit-identity check (exact mirrored ties vs the pre-cleanup snapshot):
+
+- Removed dead code: `common.formatAuto`, `common.logProps` (which was also
+  broken — it printed `value=value`), `common.Timer`, `common.CompactObjectArray`,
+  `checkers.getTablebaseFileName`, the write-only `ttSize` counter, negamax's
+  vestigial `color` parameter, and `binarySearch`'s unused `resultIndex`.
+- `players.js` reuses `checkers.isJump` instead of a local duplicate.
+- The iterative-deepening time limit is an explicit `Infinity` when no budget is
+  set (previously a `> NaN` comparison that happened to behave).
+- The search's `undo` assignment no longer hides inside an `assert()` argument.
+- `checkersUi.js`: `parseInt(..., 10)`; animation timer fix (#10 above).

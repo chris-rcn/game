@@ -383,7 +383,6 @@ CHF.checkers = function() {
             return [checkers[BLACK].length, checkers[RED].length];
         }
         pub.getCheckerCounts = getCheckerCounts;
-        var self = this;
         function toCompactString() {
             var str = "";
             var row, column;
@@ -400,7 +399,7 @@ CHF.checkers = function() {
         }
         function toString() {
             var str = fmt("Turn={} jumpLoc={} hash={} checkerCount={}, materialEvalBlack={}\n",
-                pieceChar[turn].trim(), jumpContinuationLoc, JSON.stringify(self.hash()), getCheckerCount(), round(materialEvalBlack(), 3));
+                pieceChar[turn].trim(), jumpContinuationLoc, JSON.stringify(hash()), getCheckerCount(), round(materialEvalBlack(), 3));
             var row, column;
             for (row=0; row<boardSize; row++) {
                 var line = "";
@@ -613,7 +612,7 @@ CHF.checkers = function() {
             if (jumpContinuationLoc && jumpContinuationLoc !== loc) return false;
             var opponent = otherColor(turn);
             var diags = diagonals[squares[loc]];
-            for (var i=0; i<4; i++) {
+            for (var i=0; i<diags.length; i++) {
                 var diagonal = diags[i];
                 var to = loc + diagonal;
                 if ((squares[to] & opponent)) {
@@ -640,7 +639,7 @@ CHF.checkers = function() {
         }
         function hasSlide(loc) {
             var diags = diagonals[squares[loc]];
-            for (var i=0; i<4; i++) {
+            for (var i=0; i<diags.length; i++) {
                 var diagonal = diags[i];
                 var to = loc + diagonal;
                 if (squares[to] === OPEN) {
@@ -815,10 +814,6 @@ CHF.checkers = function() {
     }
     pub.getForcedJumps = getForcedJumps;
 
-    function getTablebaseFileName() {
-        return fmt("pub/end{}{}", boardSize, jumpsAreForced ? "Forced" : "Unforced")
-    }
-    pub.getTablebaseFileName = getTablebaseFileName;
     function isJump(move) {
         return Math.abs(move.to - move.from) > maxDiagonalOffset;
     }

@@ -9,6 +9,14 @@ test('format replaces {} placeholders in order', function () {
     assert.strictEqual(common.format("{}{}", "a"), "a{}");
 });
 
+test('format keeps replacement-pattern characters in values literal', function () {
+    // String.replace treats "$&", "$'" etc. specially in string replacements;
+    // format must not (fixed during cleanup by using a function replacement).
+    assert.strictEqual(common.format("v={}", "$&"), "v=$&");
+    assert.strictEqual(common.format("v={}", "a$'b"), "v=a$'b");
+    assert.strictEqual(common.format("v={}", "$`$$"), "v=$`$$");
+});
+
 test('round rounds to the requested number of places', function () {
     assert.strictEqual(common.round(1.2345, 2), 1.23);
     assert.strictEqual(common.round(1.235, 2), 1.24);

@@ -16,12 +16,7 @@ CHF.checkers.players = function() {
     var assert = common.assert;
     var round = common.round;
 
-    var boardSize = checkers.getBoardSize();
-    var maxDiagonalOffset = boardSize + 2;
-
-    function isJumpMove(move) {
-        return Math.abs(move.from - move.to) > maxDiagonalOffset;
-    }
+    var isJumpMove = checkers.isJump;
 
     function Random(seed) {
         var pub = this;
@@ -88,7 +83,6 @@ CHF.checkers.players = function() {
         pub.typicalDepth = new common.IirFilter(1);
         pub.useIterativeDeepening = false;
         pub.useKillerMove = true;
-        var ttSize;
         var transpositionTable;
         var TT_EXACT = 0;
         var TT_LOWERBOUND = 1;
@@ -98,7 +92,7 @@ CHF.checkers.players = function() {
                 console.log(new Array(depth + 2).join("   ") + message);
             }
         }
-        function negamax(game, depth, alpha, beta, color, killer) {
+        function negamax(game, depth, alpha, beta, killer) {
             // returns { move, value, distanceFromRoot }
 
             var alphaOrig = alpha;
@@ -201,14 +195,14 @@ CHF.checkers.players = function() {
             for (m=0; m<moves.length; m++) {
                 var move = moves[m];
                 var initialTurnIsBlack = game.turnIsBlack();
-                var undo;
-                assert(undo = game.makeMove(move, true /*skipChecks*/));
+                var undo = game.makeMove(move, true /*skipChecks*/);
+                assert(undo, "search generated an illegal move");
                 //logIndented(depth, fmt("{} to {}...", move.from, move.to));
                 var childResult;
                 if (game.turnIsBlack() === initialTurnIsBlack) {
-                    childResult = negamax(game, depth+1, alpha/valueDecay, beta/valueDecay, color);
+                    childResult = negamax(game, depth+1, alpha/valueDecay, beta/valueDecay);
                 } else {
-                    childResult = negamax(game, depth+1, -beta/valueDecay, -alpha/valueDecay, -color);
+                    childResult = negamax(game, depth+1, -beta/valueDecay, -alpha/valueDecay);
                     childResult.value *= -1;
                 }
                 undo();
@@ -251,7 +245,6 @@ CHF.checkers.players = function() {
                 }
                 ttEntry.r = remaining;
                 transpositionTable[hash.h0] = ttEntry;
-                ttSize++;
             }
             return result;
         }
@@ -265,15 +258,14 @@ CHF.checkers.players = function() {
             // returns { move, value, distanceFromRoot }
             assert(pub.maxDepth > 0);
             if (pub.useIterativeDeepening || maxSeconds > 0) {
-                var limitSec = 0.4 * maxSeconds;
+                var limitSec = maxSeconds > 0 ? 0.4 * maxSeconds : Infinity;
                 var killer = null;
                 var startMs = common.nowMs();
                 for (currentMaxDepth=1; ; currentMaxDepth+=1) {
                     transpositionTable = {};
-                    ttSize = 0;
                     // negamax returns the result wrapper; the Move (and its
                     // .forced flag) live on result.move.
-                    var result = negamax(game, 0, -1e9, 1e9, 1, killer);
+                    var result = negamax(game, 0, -1e9, 1e9, killer);
                     if (result.move && !result.move.forced) {
                         if (common.elapsedSec(startMs) > limitSec || currentMaxDepth >= pub.maxDepth) {
                             pub.typicalDepth.add(currentMaxDepth);
@@ -290,10 +282,9 @@ CHF.checkers.players = function() {
                 }
             }
             transpositionTable = {};
-            ttSize = 0;
             currentMaxDepth = pub.maxDepth;
             pub.typicalDepth.add(currentMaxDepth);
-            return negamax(game, 0, -1e9, 1e9, 1);
+            return negamax(game, 0, -1e9, 1e9);
         }
         pub.genMoveDetail = genMoveDetail;
     }

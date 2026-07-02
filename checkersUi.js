@@ -22,8 +22,8 @@ CHF.checkers.ui = function() {
     var animatingProgress;
     var animationFramesPerSec = 20;
     var animationPeriodMs = 300;
-    var animationFrames = 1000 * animationFramesPerSec / animationPeriodMs;
-    var animationFramePeriodMs = animationPeriodMs / animationFrames;
+    var animationFrames = animationPeriodMs * animationFramesPerSec / 1000;
+    var animationFramePeriodMs = 1000 / animationFramesPerSec;
     var animationVelocity = 1 / animationFrames;
     var randPlayer = new players.Random();
     var player = new players.Search(1);
@@ -109,7 +109,7 @@ CHF.checkers.ui = function() {
                 }
             }
         }
-        if (selectedLocation >= 0) {
+        if (selectedLocation !== null) {
             var coord = locToCoord(selectedLocation);
             x = coord.column * tileSize + pad;
             y = coord.row * tileSize + pad;
@@ -198,7 +198,7 @@ CHF.checkers.ui = function() {
         boardImage = bdImg;
         message = msg;
         level = lvl;
-        setLevel(parseInt(localStorage.getItem("level")));
+        setLevel(parseInt(localStorage.getItem("level"), 10));
         boardCtx = board.getContext("2d");
         board.addEventListener("mousedown", tapOrClick, false);
         board.addEventListener("touchstart", tapOrClick, false);

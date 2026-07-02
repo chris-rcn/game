@@ -11,38 +11,26 @@ CHF.common = function () {
 
     var nowProvider = isNodeJs() ? Date : window.performance;
 
+    // A function replacement keeps "$&"-style patterns in values literal.
+    function replaceToken(formatted, value) {
+        return formatted.replace("{}", function () { return value; });
+    }
+
     function format(formatted) {
         for (var i=1; i<arguments.length; i+=1) {
-            formatted = formatted.replace("{}", arguments[i]);
+            formatted = replaceToken(formatted, arguments[i]);
         }
         return formatted;
     }
     pub.format = format;
 
-    function formatAuto(formatted) {
-        for (var i=1; i<arguments.length; i+=1) {
-            formatted = formatted.replace("{}", autoScaleFormat(arguments[i]));
-        }
-        return formatted;
-    }
-    pub.formatAuto = formatAuto;
-
     function log(formatted) {
         for (var i=1; i<arguments.length; i+=1) {
-            formatted = formatted.replace("{}", autoScaleFormat(arguments[i]));
+            formatted = replaceToken(formatted, autoScaleFormat(arguments[i]));
         }
         console.log(formatted);
     }
     pub.log = log;
-
-    function logProps(obj) {
-        var output = "";
-        for (var i=1; i<arguments.length; i+=1) {
-            output += arguments[i] + "=" + autoScaleFormat(arguments[i]) + " ";
-        }
-        console.log(output);
-    }
-    pub.logProps = logProps;
 
     function coalesce(a, b) {
         if (a == null) return b;
@@ -57,7 +45,7 @@ CHF.common = function () {
     }
     pub.assert = assert;
 
-    function nowMs() {  // TODO: deprecate
+    function nowMs() {
         return nowProvider.now();
     }
     pub.nowMs = nowMs;
@@ -66,17 +54,6 @@ CHF.common = function () {
         return (nowMs() - startMs) / 1000;
     }
     pub.elapsedSec = elapsedSec;
-
-    function Timer() {
-        this.startMs = nowProvider.now();
-    }
-    Timer.prototype.reset = function () {
-        this.startMs = nowProvider.now();
-    };
-    Timer.prototype.getElapsedSec = function () {
-        return (nowProvider.now() - this.startMs) / 1000;
-    };
-    pub.Timer = Timer;
 
     function round(num, places) {
         places = places || 0;
@@ -202,9 +179,9 @@ CHF.common = function () {
         }
         var minIndex = 0;
         var maxIndex = arrayLength - 1;
-        var currentIndex, currentElement, resultIndex;
+        var currentIndex, currentElement;
         while (minIndex <= maxIndex) {
-            resultIndex = currentIndex = (minIndex + maxIndex) / 2 | 0;
+            currentIndex = (minIndex + maxIndex) / 2 | 0;
             currentElement = array[currentIndex];
             if (currentElement < target) {
                 minIndex = currentIndex + 1;
@@ -232,35 +209,6 @@ CHF.common = function () {
         return (str + pad).substring(0, pad.length);
     }
     pub.padRight = padRight;
-
-    function CompactObjectArray(capacity, nameToArrayConstructor) {
-        var propCount = 0;
-        var props = [];
-        var arrays = [];
-        for (var prop in nameToArrayConstructor) {
-            if (nameToArrayConstructor.hasOwnProperty(prop)) {
-                props[propCount] = prop;
-                var constructor = nameToArrayConstructor[prop];
-                arrays[propCount] = new constructor(capacity);
-                propCount++;
-            }
-        }
-        this.get = function (index, item) {
-            assert(index < capacity);
-            item = item || {};
-            for (var i=0; i<propCount; i++) {
-                item[props[i]] = arrays[i][index];
-            }
-            return item;
-        };
-        this.set = function (index, item) {
-            assert(index < capacity);
-            for (var i=0; i<propCount; i++) {
-                arrays[i][index] = item[props[i]];
-            }
-        };
-    }
-    pub.CompactObjectArray = CompactObjectArray;
 
     function IirFilter(decay, initialValue, initialWeight) {
         initialValue = initialValue || 0;
