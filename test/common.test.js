@@ -85,23 +85,44 @@ test('binarySearch finds present elements', function () {
     }
 });
 
-test('binarySearch returns a negative value for missing elements above the minimum', function () {
-    // The convention here is ~maxIndex == -(insertion point).
-    assert.strictEqual(common.binarySearch([10, 20, 30], 15), -1);
-    assert.strictEqual(common.binarySearch([10, 20, 30], 25), -2);
-    assert.strictEqual(common.binarySearch([10, 20, 30], 35), -3);
+test('binarySearch returns ~insertionPoint for every missing element (BUG #1, fixed)', function () {
+    // Standard convention: misses return -(insertionPoint + 1), so they are
+    // ALWAYS negative — including the below-minimum case, where the old
+    // ~maxIndex convention returned 0 and collided with "found at index 0".
+    var arr = [10, 20, 30];
+    assert.strictEqual(common.binarySearch(arr, 5), -1);   // insert at 0
+    assert.strictEqual(common.binarySearch(arr, 15), -2);  // insert at 1
+    assert.strictEqual(common.binarySearch(arr, 25), -3);  // insert at 2
+    assert.strictEqual(common.binarySearch(arr, 35), -4);  // insert at 3
+    [5, 15, 25, 35].forEach(function (target, i) {
+        var result = common.binarySearch(arr, target);
+        assert.ok(result < 0, "miss must be negative for " + target);
+        assert.strictEqual(~result, i, "insertion point round-trip for " + target);
+    });
 });
 
-test('KNOWN BUG #1: binarySearch returns 0 (looks like "found at 0") when target is below all elements',
-    { todo: 'binarySearch returns ~maxIndex; when maxIndex ends at -1 that is ~(-1) === 0, ' +
-            'which is indistinguishable from a successful match at index 0. ' +
-            'Callers using "result >= 0" as a found-test get a false positive.' },
-    function () {
-        var result = common.binarySearch([10, 20, 30], 5);
-        assert.ok(result < 0,
-            "expected a negative not-found result, got " + result +
-            " which collides with 'found at index 0'");
-    });
+test('binarySearch found/miss property over a randomized array', function () {
+    var rand = new common.Random(17);
+    for (var trial = 0; trial < 50; trial++) {
+        var arr = [];
+        var v = 0;
+        var len = rand.int(20);
+        for (var i = 0; i < len; i++) {
+            v += 2 + rand.int(5) * 2; // strictly increasing, even values
+            arr.push(v);
+        }
+        arr.forEach(function (el, idx) {
+            assert.strictEqual(common.binarySearch(arr, el), idx);
+        });
+        for (var probe = 1; probe <= v + 1; probe += 2) { // odd values never present
+            var result = common.binarySearch(arr, probe);
+            assert.ok(result < 0, "miss must be negative: " + probe + " in [" + arr + "]");
+            var ip = ~result;
+            assert.ok((ip === 0 || arr[ip - 1] < probe) && (ip === arr.length || arr[ip] > probe),
+                "wrong insertion point " + ip + " for " + probe + " in [" + arr + "]");
+        }
+    }
+});
 
 test('KNOWN BUG #2: SuperRandom is never exported',
     { todo: 'common.js line 145 re-assigns pub.Random = Random instead of pub.SuperRandom = SuperRandom, ' +

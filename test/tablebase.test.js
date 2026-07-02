@@ -42,8 +42,9 @@ test('ResultList2 returns null for absent hashes (including below the minimum h0
         { h0: 100, h1: 5, v: 1, d: 3 },
         { h0: 200, h1: 1, v: 0, d: 7 }
     ]));
-    // h0 below every stored h0 exercises the binarySearch "not found returns 0"
-    // bug (BUG #1); getEntry survives it only because it re-checks h0Array[i].
+    // h0 below every stored h0 exercises what used to be the binarySearch
+    // ambiguous-zero case (BUG #1, fixed); getEntry always survived it by
+    // re-checking h0Array[i].
     assert.strictEqual(tb.getEntry({ h0: 50, h1: 5 }, 2), null);
     assert.strictEqual(tb.getEntry({ h0: 150, h1: 5 }, 2), null);
     assert.strictEqual(tb.getEntry({ h0: 250, h1: 5 }, 2), null);
@@ -91,6 +92,40 @@ test('shipped end8Forced tablebase loads and is sorted by (h0, h1)',
             assert.ok(h0[i] > h0[i - 1] || (h0[i] === h0[i - 1] && h1[i] >= h1[i - 1]),
                 "entries out of order at index " + i);
         }
+    });
+
+test('ResultList2 lookups agree exactly with baseline after the binarySearch fix (BUG #1)',
+    { skip: !fs.existsSync(forcedPath) && 'end8Forced not present' },
+    function () {
+        // getEntry survived the old ambiguous-zero return only because it
+        // re-checks h0Array[i]; this proves the convention change is
+        // behavior-neutral for the one production caller. Fresh instances and
+        // identical probe order keep the maxObservedCheckerCount heuristic in
+        // both implementations in the same state.
+        var common = require('../common.js');
+        var baseline = require('../baseline/checkers.js');
+        var tbNew = new checkers.ResultList2(loadBuffer(forcedPath));
+        var tbOld = new baseline.ResultList2(loadBuffer(forcedPath));
+        var size = tbNew.getStats().size;
+        var buffer = loadBuffer(forcedPath);
+        var h0 = new Uint32Array(buffer, 0, size);
+        var h1 = new Uint32Array(buffer, 4 * size, size);
+        var rand = new common.Random(23);
+        var probes = [];
+        for (var i = 0; i < 500; i++) {
+            var idx = rand.int(size);
+            probes.push({ h0: h0[idx], h1: h1[idx] });                    // present
+            probes.push({ h0: rand.next31(), h1: rand.next31() });        // almost surely absent
+            probes.push({ h0: h0[idx], h1: rand.next31() });              // h0 present, h1 absent
+        }
+        probes.push({ h0: 0, h1: 0 });                                    // below-minimum case
+        probes.forEach(function (p, n) {
+            var checkerCount = 2 + (n % 5);
+            assert.deepStrictEqual(
+                tbNew.getEntry(p, checkerCount),
+                tbOld.getEntry(p, checkerCount),
+                "probe " + n + ": " + JSON.stringify(p));
+        });
     });
 
 test('KNOWN BUG #8: shipped end8Unforced tablebase cannot be loaded by ResultList2',

@@ -220,9 +220,6 @@ CHF.common = function () {
     }
     pub.shuffle = shuffle;
 
-    // Returns the index of target, or ~insertionPoint (always negative) when
-    // absent.  (~maxIndex would be 0 — indistinguishable from a match at
-    // index 0 — whenever target is smaller than every element.)
     function binarySearch(array, target, arrayLength) {
         if (arrayLength == null) {
             arrayLength = array.length;
@@ -243,7 +240,7 @@ CHF.common = function () {
                 return currentIndex;
             }
         }
-        return ~minIndex;
+        return ~maxIndex;
     }
     pub.binarySearch = binarySearch;
 

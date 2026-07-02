@@ -13,14 +13,21 @@ concentrated in the utility library, the search player, and the shipped data fil
 
 ## High impact
 
-### 1. `common.binarySearch` returns `0` for "not found, below minimum" — `common.js:243`
-The not-found return is `~maxIndex`. When the target is smaller than every element,
+### 1. `common.binarySearch` returns `0` for "not found, below minimum" — `common.js:243` — **FIXED in root copy**
+The not-found return was `~maxIndex`. When the target is smaller than every element,
 `maxIndex` ends at `-1` and `~(-1) === 0`, which is indistinguishable from "found at
-index 0". Any caller using `result >= 0` as the found-test gets a false positive.
-`ResultList2.getEntry` (the only in-repo caller) survives only because it re-checks
-`h0Array[i] === hash.h0` after the search. Fix: return `~minIndex` (the standard
-`-(insertionPoint + 1)` convention).
-*Evidence:* `binarySearch([10,20,30], 5) === 0`.
+index 0". Any caller using `result >= 0` as the found-test got a false positive.
+`ResultList2.getEntry` (the only in-repo caller) survived only because it re-checks
+`h0Array[i] === hash.h0` after the search.
+*Evidence:* `binarySearch([10,20,30], 5) === 0` pre-fix.
+
+Fixed by returning `~minIndex` — the standard `-(insertionPoint + 1)` convention:
+misses are now always negative and `~result` is the insertion point (mid-array miss
+values shift by one relative to the old convention, e.g. 15 in `[10,20,30]` now
+returns -2 instead of -1; no in-repo caller consumed those values). A parity test
+probes the real `end8Forced` tablebase through root and baseline `ResultList2`
+side by side to prove lookups are behavior-identical, and the game-play path never
+touches `binarySearch` at all. The bug remains in `baseline/common.js`.
 
 ### 2. `randomBoard`'s per-color cap never fires — `checkers.js:285`
 ```js
