@@ -132,14 +132,23 @@ one dependency, `shuffle`, is shared and stays), and exporting untested dead cod
 adds surface without value — so the class and the duplicate export line were
 **removed** from the root copy. It survives unchanged in `baseline/common.js`.
 
-### 9. Jump continuation is forced even when "Forced jumps" is off — `checkers.js:506,662`
-With `jumpsAreForced = false` a player may decline to start a jump, but once a
+### 9. Jump continuation is forced even when "Forced jumps" is off — `checkers.js:506,662` — **NOT A BUG: confirmed design decision**
+With `jumpsAreForced = false` a player may decline to *start* a jump, but once a
 multi-jump has begun, `calcMoves` offers only the continuation jumps and `makeMove`
 rejects everything else (`if (jumpContinuationLoc) return false;` in the slide
-branch). In most "optional capture" rule sets, stopping mid-chain is allowed. At
-minimum the behavior contradicts the UI checkbox label; the UI even shows the
-"Keep jumping!" prompt only in forced mode while still enforcing the continuation
-in unforced mode.
+branch), even though most "optional capture" rule sets allow stopping mid-chain.
+
+Confirmed by the author as deliberate: the UI's click-source/click-destination
+interaction offers no gesture meaning "end the jump here", so the rules enforce
+continuation as a house rule rather than offer an option the human could never
+exercise. The UI is consistent with this — mid-chain it auto-selects the
+continuation square in both modes (only the "Keep jumping!" message is gated on
+forced mode). The rule binds both sides equally, the search models it correctly,
+and the quiescence stand-pat logic deliberately never offers a decline option
+mid-chain. If rule-correct optional continuation is ever wanted, it requires a
+coordinated change: a UI end-turn gesture (e.g. clicking the jumping piece), an
+explicit end-turn action in the engine's mid-chain move set, search support for
+the stop option, and regeneration of any unforced tablebase.
 
 ### 10. UI animation timer runs ~11x too fast — `checkersUi.js:25`
 ```js
