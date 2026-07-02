@@ -305,6 +305,17 @@ test('materialEvalBlack accepts a custom king weight', function () {
     assert.strictEqual(pawns.materialEvalBlack(1.5), pawns.materialEvalBlack(3));
 });
 
+test('materialEvalBlack accepts a per-rank pawn advancement weight', function () {
+    // Black pawn on 40 is on forward rank 3; red pawn on 2 is on forward
+    // rank 0. With rankWeight 0.1: black = 1.3, red = 1.0.
+    var g = h.makeGame({ turn: 'black', pieces: { 40: 'b', 2: 'r' } });
+    assert.ok(Math.abs(g.materialEvalBlack(2, 0.1) - 1.3 / 2.3) < 1e-12);
+    assert.strictEqual(g.materialEvalBlack(2, 0), g.materialEvalBlack(2));
+    // Kings carry no rank term.
+    var kings = h.makeGame({ turn: 'black', pieces: { 40: 'B', 2: 'R' } });
+    assert.strictEqual(kings.materialEvalBlack(2, 0.1), kings.materialEvalBlack(2, 0));
+});
+
 test('forwardRank counts from each side\'s home row', function () {
     var g = new checkers.Game(); // forwardRank is an instance method
     assert.strictEqual(g.forwardRank(2, h.RED), 0);

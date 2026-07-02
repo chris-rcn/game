@@ -144,6 +144,26 @@ games per mode (depth 4) and held at 53.5%/52.5% in slow games (depth 6,
 node arena.js --a new --b new --opts-a kingValue=1.4 --opts-b kingValue=2 --games 400
 ```
 
+### Rejected: pawn-advancement bonus
+
+`Search.rankValue` (a pawn counts `1 + w × forwardRank` material units) was
+tested the same way and **rejected — it loses at every weight tried**:
+
+| w/rank | depth 4, 120/mode (forced / unforced) |
+|---|---|
+| 0.005 | 50.0% / 47.5% |
+| 0.01 | 45.4% / 47.1% |
+| 0.02 | 43.3% / 49.2% |
+| 0.04 | 40.8% / 41.7% |
+
+Depth-5 confirmation of the least-bad candidate (0.005, 100/mode): 47.0% /
+49.5%. Draw rates did not drop either. Plausible reading: in checkers,
+advanced unsupported pawns are liabilities (they concede favorable trades and
+abandon the back row), and the search already finds kinging plans tactically
+within its horizon — so a blanket advancement gradient pushes pawns into
+danger without buying anything. The knob stays (default 0, exactly the old
+eval) in case a future, deeper-search retest disagrees.
+
 ## Test coverage summary
 
 - **Rules**: opening position, slides, jumps, forced-jump exclusivity,

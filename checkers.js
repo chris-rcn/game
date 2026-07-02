@@ -730,12 +730,16 @@ CHF.checkers = function() {
             return (color & RED) ? rank(loc) : boardSizeM1-rank(loc);
         }
         pub.forwardRank = forwardRank;
-        function materialEval(kingWeight) {
+        function materialEval(kingWeight, rankWeight) {
             var polarity = turn === BLACK ? 1 : -1;
-            return polarity * (2 * materialEvalBlack(kingWeight) - 1);
+            return polarity * (2 * materialEvalBlack(kingWeight, rankWeight) - 1);
         }
-        function materialEvalBlack(kingWeight) {
+        // A pawn counts 1 + rankWeight * forwardRank (its progress toward
+        // kinging) material units; folding advancement into the material
+        // ratio keeps it phase-scaled the same way material itself is.
+        function materialEvalBlack(kingWeight, rankWeight) {
             kingWeight = kingWeight || 2;
+            rankWeight = rankWeight || 0;
             var black = 0;
             var red = 0;
             var i, loc, checkersColor;
@@ -745,7 +749,7 @@ CHF.checkers = function() {
                 if ((squares[loc] & KING)) {
                     black += kingWeight;
                 } else {
-                    black += 1;
+                    black += 1 + rankWeight * forwardRank(loc, BLACK);
                 }
             }
             checkersColor = checkers[RED];
@@ -754,7 +758,7 @@ CHF.checkers = function() {
                 if ((squares[loc] & KING)) {
                     red += kingWeight;
                 } else {
-                    red += 1;
+                    red += 1 + rankWeight * forwardRank(loc, RED);
                 }
             }
             return black / (black + red);

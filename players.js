@@ -77,8 +77,9 @@ CHF.checkers.players = function() {
         // it and every candidate above lost; 1.4 — the checkers-literature
         // ballpark — scored 53.7% ± 3.1 against 2.0 over 1000 games.
         pub.kingValue = 1.4;
+        pub.rankValue = 0; // per-rank pawn advancement, in pawn units
         pub.evalFunction = function(game) {
-            return game.materialEval(pub.kingValue);
+            return game.materialEval(pub.kingValue, pub.rankValue);
         };
         pub.evalDither = 0.001;
         pub.doQuiesce = true;

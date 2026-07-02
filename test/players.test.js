@@ -25,6 +25,10 @@ test('Search defaults to the learned king value of 1.4', function () {
     // whole scan bracketing it (every K<2 won, every K>2 lost).
     var s = new players.Search(3);
     assert.strictEqual(s.kingValue, 1.4);
+    // Pawn-advancement weight exists but was tested and REJECTED: every
+    // candidate (0.005-0.04/rank) scored at or below 50% against 0 at depths
+    // 4 and 5 (see README). It stays parameterized for future re-testing.
+    assert.strictEqual(s.rankValue, 0);
 });
 
 test('Random player: genMove returns a legal move, deterministically per seed', function () {
