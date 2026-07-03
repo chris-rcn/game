@@ -76,6 +76,8 @@ var forcedPath = path.join(__dirname, '..', 'end8Forced');
 var unforcedPath = path.join(__dirname, '..', 'end8Unforced');
 var legacyFixturePath = path.join(__dirname, '..', 'testdata', 'end8Forced.legacy');
 var paddedFixturePath = path.join(__dirname, '..', 'testdata', 'end8Unforced.padded');
+var v3ForcedPath = path.join(__dirname, '..', 'testdata', 'end8Forced.v3');
+var v3UnforcedPath = path.join(__dirname, '..', 'testdata', 'end8Unforced.v3');
 
 function loadBuffer(p) {
     var b = fs.readFileSync(p);
@@ -222,7 +224,9 @@ test('Search uses the unforced tablebase for exact endgame values',
     function () {
         var common = require('../common.js');
         var players = require('../players.js');
-        var tb = new checkers.ResultList2(loadBuffer(unforcedPath));
+        var tb = checkers.openTablebase(loadBuffer(unforcedPath));
+        var lookup = tb.probe ? function (g) { return tb.probe(g); } :
+            function (g) { return tb.getEntry(g.hashBase(), g.getCheckerCount()); };
         checkers.setForcedJumps(false);
         // Find a tablebase-covered winning position via seeded playouts.
         var rand = new common.Random(7);
@@ -235,7 +239,7 @@ test('Search uses the unforced tablebase for exact endgame values',
                 game.makeMove(mv[rand.int(mv.length)], true);
                 if (game.getCheckerCount() <= 3 && game.getMoves().length > 0 &&
                         !game.getJumpContinuationLoc()) {
-                    var entry = tb.getEntry(game.hashBase(), game.getCheckerCount());
+                    var entry = lookup(game);
                     if (entry && entry.v === 1 && entry.d > 1) {
                         found = JSON.parse(JSON.stringify(game.getState()));
                         break;
@@ -327,13 +331,13 @@ test('convertBuffer produces lookup-identical v3 tables from both older formats'
     });
 });
 
-test('canonical v3 files match their source fixtures entry-for-entry',
-    { skip: !(fs.existsSync(forcedPath) && fs.existsSync(legacyFixturePath) &&
-              fs.existsSync(unforcedPath) && fs.existsSync(paddedFixturePath)) && 'files not present' },
+test('v3-converted files match their source fixtures entry-for-entry',
+    { skip: !(fs.existsSync(v3ForcedPath) && fs.existsSync(legacyFixturePath) &&
+              fs.existsSync(v3UnforcedPath) && fs.existsSync(paddedFixturePath)) && 'files not present' },
     function () {
         [
-            { v3: forcedPath, fixture: legacyFixturePath, forced: true, count: 270254 },
-            { v3: unforcedPath, fixture: paddedFixturePath, forced: false, count: 230080 }
+            { v3: v3ForcedPath, fixture: legacyFixturePath, forced: true, count: 270254 },
+            { v3: v3UnforcedPath, fixture: paddedFixturePath, forced: false, count: 230080 }
         ].forEach(function (pair) {
             var tbV3 = new checkers.ResultList2(loadBuffer(pair.v3));
             var tbSrc = new checkers.ResultList2(loadBuffer(pair.fixture));
@@ -351,15 +355,15 @@ test('canonical v3 files match their source fixtures entry-for-entry',
         });
     });
 
-test('canonical v3 files contain no 54-bit key collisions (conversion provably lossless)',
-    { skip: !(fs.existsSync(forcedPath) && fs.existsSync(unforcedPath)) && 'files not present' },
+test('v3-converted files contain no 54-bit key collisions (conversion provably lossless)',
+    { skip: !(fs.existsSync(v3ForcedPath) && fs.existsSync(v3UnforcedPath)) && 'files not present' },
     function () {
         // v3 keeps 31 h0 bits + 23 h1 bits per entry. Distinct positions
         // colliding on all 54 bits would make lookups ambiguous; this audit
         // proves every stored entry remains uniquely keyed (the legacy
         // forced file was also checked against its full 31-bit h1 before
         // conversion: the dropped bits never disambiguated anything).
-        [forcedPath, unforcedPath].forEach(function (p) {
+        [v3ForcedPath, v3UnforcedPath].forEach(function (p) {
             var tb = new checkers.ResultList2(loadBuffer(p));
             var n = tb.getStats().size;
             var collisions = 0;
@@ -434,7 +438,9 @@ test('Search auto-loads the canonical tablebase under Node (on by default)',
     function () {
         var common = require('../common.js');
         var players = require('../players.js');
-        var tb = new checkers.ResultList2(loadBuffer(unforcedPath));
+        var tb = checkers.openTablebase(loadBuffer(unforcedPath));
+        var lookup = tb.probe ? function (g) { return tb.probe(g); } :
+            function (g) { return tb.getEntry(g.hashBase(), g.getCheckerCount()); };
         checkers.setForcedJumps(false);
         // Find a covered win DEEP enough that a raw depth-4 search cannot
         // prove it — only a tablebase makes the value near-certain.
@@ -448,7 +454,7 @@ test('Search auto-loads the canonical tablebase under Node (on by default)',
                 game.makeMove(mv[rand.int(mv.length)], true);
                 if (game.getCheckerCount() <= 3 && game.getMoves().length > 0 &&
                         !game.getJumpContinuationLoc()) {
-                    var entry = tb.getEntry(game.hashBase(), game.getCheckerCount());
+                    var entry = lookup(game);
                     if (entry && entry.v === 1 && entry.d >= 13) {
                         found = JSON.parse(JSON.stringify(game.getState()));
                         break;
@@ -554,3 +560,55 @@ test('TablebaseV4 probe round-trips through a synthetic table', function () {
     // Truncation is rejected.
     assert.throws(function () { new checkers.TablebaseV4(buffer.slice(0, 1000)); }, /slots|version|CHFI/);
 });
+
+test('canonical v4 tables cover 4 pieces and agree with the v3-era data on <=3',
+    { skip: !fs.existsSync(forcedPath) && 'files not present' },
+    function () {
+        var tb = checkers.openTablebase(loadBuffer(forcedPath));
+        if (!tb.probe) return; // canonical files not yet v4 in this checkout
+        var stats = tb.getStats();
+        assert.strictEqual(stats.maxPieces, 4);
+        assert.strictEqual(stats.forcedJumps, true);
+        // The 3-kings-vs-1 positions we once proved ABSENT are now covered
+        // and overwhelmingly won for the three-king side.
+        var helpers = require('./helpers.js');
+        var covered = 0, wins = 0, probes = 0;
+        [[2, 6, 10], [40, 48, 24], [2, 4, 8]].forEach(function (kings) {
+            [64, 66, 30].forEach(function (redAt) {
+                if (kings.indexOf(redAt) >= 0) return;
+                var pieces = {};
+                kings.forEach(function (l) { pieces[l] = 'B'; });
+                pieces[redAt] = 'R';
+                var g = helpers.makeGame({ turn: 'black', pieces: pieces });
+                probes++;
+                var e = tb.probe(g);
+                if (e) { covered++; if (e.v === 1) wins++; }
+            });
+        });
+        assert.strictEqual(covered, probes, "all 3Kv1K probes covered");
+        assert.ok(wins >= probes - 1, "3 kings vs 1 should be winning: " + wins + "/" + probes);
+        // <=3-piece agreement with the v3-era converted table on sampled states.
+        var v3 = new checkers.ResultList2(loadBuffer(v3ForcedPath));
+        var common = require('../common.js');
+        checkers.setForcedJumps(true);
+        var rand = new common.Random(77);
+        var compared = 0, disagreements = 0;
+        for (var g0 = 0; g0 < 80; g0++) {
+            var game = new checkers.Game();
+            for (var step = 0; step < 400; step++) {
+                var mv = game.getMoves();
+                if (mv.length === 0) break;
+                game.makeMove(mv[rand.int(mv.length)], true);
+                if (game.getCheckerCount() <= 3 && game.getMoves().length > 0 &&
+                        !game.getJumpContinuationLoc()) {
+                    var old = v3.getEntry(game.hashBase(), 99);
+                    if (!old) continue; // v3 lacks deep states (BUGS.md #12)
+                    var neo = tb.probe(game);
+                    compared++;
+                    if (!neo || neo.v !== old.v) disagreements++;
+                }
+            }
+        }
+        assert.ok(compared > 100, "sampled " + compared + " overlapping states");
+        assert.strictEqual(disagreements, 0, "values must agree with the validated v3 data");
+    });

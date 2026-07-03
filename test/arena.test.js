@@ -209,7 +209,7 @@ test('arena players receive the shared endgame tablebase by default', function (
     var path = require('node:path');
     if (!fs.existsSync(path.join(__dirname, '..', 'end8Forced'))) return;
     var tb = arena.loadArenaTablebase(true);
-    assert.ok(tb && typeof tb.getEntry === 'function');
+    assert.ok(tb && (typeof tb.probe === 'function' || typeof tb.getEntry === 'function'));
     assert.strictEqual(arena.loadArenaTablebase(true), tb, "loaded once and cached");
     var p = arena.makePlayer({ engine: 'new', type: 'search', depth: 2 }, tb);
     assert.strictEqual(p.inner.tablebase, tb);
