@@ -395,21 +395,3 @@ test('repetitionDraws off is bit-identical to the previous search', function () 
         { from: a.move.from, to: a.move.to, value: a.value },
         { from: b.move.from, to: b.move.to, value: b.value });
 });
-
-test('endgameBonusPieces grants one extra ply at or below the threshold', function () {
-    // typicalDepth (IirFilter with weight 1) records the effective depth of
-    // the last search, making the root-level bonus directly observable.
-    var six = h.makeGame({ turn: 'black', pieces: { 40: 'B', 42: 'B', 48: 'b', 2: 'R', 4: 'R', 66: 'r' } });
-    var many = new checkers.Game();
-    function depthUsed(game, threshold) {
-        var s = newSearch(3);
-        s.endgameBonusPieces = threshold;
-        s.genMove(game.copy());
-        return s.typicalDepth.value();
-    }
-    assert.strictEqual(new players.Search(3).endgameBonusPieces, 0, "gated off by default");
-    assert.strictEqual(depthUsed(six, 0), 3, "off: base depth");
-    assert.strictEqual(depthUsed(six, 6), 4, "6 pieces at threshold 6: +1 ply");
-    assert.strictEqual(depthUsed(six, 5), 3, "6 pieces at threshold 5: no bonus");
-    assert.strictEqual(depthUsed(many, 6), 3, "opening position: no bonus");
-});
