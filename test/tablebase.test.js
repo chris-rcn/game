@@ -620,7 +620,7 @@ test('canonical v4 tables cover 4 pieces and agree with the v3-era data on <=3',
 
 test('K vs K theory: single-corner defender loses, double-corner defender draws', function () {
     // The classic endgame facts, provable from the shipped table — and the
-    // foundation of the UI's "Draw with best play" indication (it shows
+    // foundation of the UI's "The game is a draw." indication (it shows
     // exactly when probe().v === 0, vanishes outside coverage or when the
     // position turns decisive).
     if (!fs.existsSync(forcedPath)) return;

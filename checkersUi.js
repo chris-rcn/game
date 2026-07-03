@@ -307,7 +307,7 @@ CHF.checkers.ui = function() {
         if (tb && tb.probe) {
             var entry = tb.probe(game); // null when mid-jump or uncovered
             if (entry && entry.v === 0) {
-                return "Draw with best play";
+                return "The game is a draw.";
             }
         }
         return "";
