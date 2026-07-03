@@ -136,7 +136,15 @@ CHF.checkers.players = function() {
             return game.materialEval(pub.kingValue, pub.homeRowValue,
                 pub.kingCenterValue, pub.runawayValue);
         };
-        pub.evalDither = 0.001;
+        // Uniform ±d/2 noise on each leaf eval: above the valueDecay
+        // tie-break scale, below the learned eval terms. Originally 0.001
+        // for game variety; 0.003 was adopted on arena evidence — scan
+        // positive both modes and 400 games/mode confirmation at
+        // 53.6%/54.8% ± 4.9 vs 0.001 (~+29 Elo pooled). Mechanism is
+        // consistent with the Beal effect: small noise at fixed depth
+        // implicitly rewards mobility. Larger values (0.01, 0.03) measured
+        // flat-to-mixed, not harmful — dither is a robust knob here.
+        pub.evalDither = 0.003;
         // Extension budget beyond maxDepth while a capture is pending (or
         // the move is forced): 0 = none (evaluate at the bare horizon),
         // Infinity = extend until quiet.  Generalizes the old doQuiesce

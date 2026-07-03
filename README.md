@@ -295,6 +295,64 @@ note: the UI's level ladder was linear in depth but wildly nonlinear in
 strength (level 1→2 ≈ 1000 Elo, level 4→5 ≈ 160) — addressed by playing
 `quiesceDepth = 1` at every level, which makes the rungs nearly uniform.
 
+### Overall strength delta vs the original (measured)
+
+Head-to-head at depth 4 (UI level 4 vs UI level 4), 400 games/mode with
+shared seeded openings and zero rules divergences, against the baseline
+in its **shipped UI configuration** (`doQuiesce = false`, no
+transposition table, kingValue 2, and only the tablebase that actually
+loaded in the shipped code — the legacy forced file; the shipped
+unforced tablebase never parsed in the shipped reader, so the site
+played unforced mode tablebase-free):
+
+| Mode | W-L-D (new) | Score | Elo |
+|---|---|---|---|
+| Forced | 299-17-84 | 85.3% | ≈ +305 |
+| Unforced | 253-25-122 | 78.5% | ≈ +225 |
+| Pooled | 552-42-206 | 81.9% | **≈ +260** |
+
+Against the stronger baseline *library* defaults (unlimited quiescence,
+which the shipped UI never enabled), the forced-mode gap is +100 Elo
+(194-82-124). Rough attribution from the per-change measurements:
+quiescence repair + `quiesceDepth 1` ≈ +170/+120, learned eval terms
+≈ +90-110 combined, tablebase handling ≈ +30 forced plus unblocking
+unforced entirely; the correctness fixes (TT, killer, alpha-beta decay,
+binary search) contribute reliability more than raw Elo.
+
+### Incremental Zobrist hashing (measured honestly)
+
+The board hash is maintained incrementally through every mutation path,
+making `hashBase()` O(1): the primitive is 30× faster (136ns → 4.5ns),
+but make/undo pays +22% for the bookkeeping and whole depth-4/5
+searches net only **~2% faster** — move generation and eval dominate
+node cost, not hashing. Kept anyway: strictly non-negative, verified by
+an oracle test against from-scratch recomputation at every step of
+random play, and it makes the per-node hash reads of the TT and
+repetition check free at the margin.
+
+### Adopted: eval dither raised to 0.003 (`Search.evalDither`)
+
+Uniform ±d/2 noise on each leaf eval; it sits above the `valueDecay`
+tie-break scale (~10⁻⁵) and below the learned eval terms. The original
+0.001 existed for game variety; scanning higher values vs 0.001
+(depth 4, 120/mode, forced/unforced) gave 0.003 → 52.5%/56.3%,
+0.01 → 54.2%/46.3%, 0.03 → 49.2%/51.2%, and the 400 games/mode
+confirmation of 0.003 came back **53.6% / 54.8% ± 4.9** (~54.2% ± 3.5
+pooled, ≈ +29 Elo) — positive in both modes at scan and confirmation,
+the standing adoption bar. The plausible mechanism is the Beal effect:
+small random noise at fixed depth implicitly rewards mobility (more
+continuations, more chances for a good max), and 0.003 collects that
+bonus while staying below the scale where it out-shouts the learned
+terms. Two robustness notes: even 0.03 — 30× the original — measured
+only flat-to-mixed, so the knob is forgiving; and the scan curve alone
+looked like noise (non-monotone), making this the second feature (after
+king centralization) whose verdict came from the confirmation stage
+rather than the scan. Reproduce with:
+
+```sh
+node arena.js --a new --b new --opts-a evalDither=0.003 --opts-b evalDither=0.001 --games 400
+```
+
 ### Evaluation tuning protocol
 
 Eval parameters are learned, not assumed: scan candidates head-to-head via
