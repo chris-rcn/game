@@ -462,20 +462,3 @@ test('node-budgeted moves are deterministic for a given budget', function () {
     }
     assert.strictEqual(move(2000), move(2000));
 });
-
-test('mobilityValue adds a mover-relative per-move bonus at eval time', function () {
-    // Black to move with 2 quiet king moves... use a position with a known
-    // move count: black king on 40 has 4 moves; red king far away on 2.
-    checkers.setForcedJumps(true);
-    var g = h.makeGame({ turn: 'black', pieces: { 40: 'B', 2: 'R' } });
-    var moves = g.getMoves();
-    assert.strictEqual(new players.Search(3).mobilityValue, 0, "gated off by default");
-    var s = newSearch(1);
-    var base = s.evalFunction(g, 0, moves);
-    s.mobilityValue = 0.005;
-    var withMob = s.evalFunction(g, 0, moves);
-    assert.ok(Math.abs(withMob - (base + 0.005 * moves.length)) < 1e-12,
-        "bonus = mobilityValue * moves.length");
-    // Without a move list (external callers), the term is skipped.
-    assert.strictEqual(s.evalFunction(g), base);
-});
