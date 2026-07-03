@@ -471,3 +471,25 @@ test('Search auto-loads the canonical tablebase under Node (on by default)',
         assert.ok(off.value < 0.9,
             "with tablebase explicitly off, a depth-4 search cannot prove a d>=13 win, got " + off.value);
     });
+
+test('generator reproduces shipped values for the 2-piece space (fast slice of the full proof)', function () {
+    // The full <=3-piece verification (tools/verify-generator.js) shows
+    // 100% presence and ZERO value mismatches across all 500,334 shipped
+    // entries in both modes; this test keeps a fast slice of that proof in
+    // the suite.
+    var gen = require('../tools/generate-tablebase.js');
+    var tb = new checkers.ResultList2(loadBuffer(forcedPath));
+    var solved = gen.solve(2, true, function () {});
+    var present = 0, valueMismatch = 0;
+    solved.entries.forEach(function (e) {
+        var s = tb.getEntry({ h0: e.h0, h1: e.h1 }, 99);
+        if (!s) return;
+        present++;
+        if (s.v !== e.v) valueMismatch++;
+    });
+    assert.strictEqual(valueMismatch, 0, "solver and shipped table must agree on every value");
+    assert.ok(present >= 2770, "2-piece space should overlap substantially, got " + present);
+    // Elimination terminals (side to move has no pieces) are stored: v=-1 d=0.
+    var g = h.makeGame({ turn: 'red', pieces: { 40: 'B' } });
+    assert.deepStrictEqual(tb.getEntry(g.hashBase(), 99), { v: -1, d: 0 });
+});

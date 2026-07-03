@@ -257,6 +257,21 @@ because the other search bugs are gated off by default (#4 needs
 `useTranspositionTable`, #5 needs iterative deepening) or are ~1e-5 noise (#7).
 The bug remains present in `baseline/players.js` for arena comparison.
 
+### 12. Shipped tablebases misclassify deep decisive endgames as draws — data files
+Discovered while validating the new generator (`tools/generate-tablebase.js`)
+against the shipped tables. An independent layered-retrograde solve of the
+complete ≤3-piece space agrees with **every one of the 500,334 shipped entries
+on value (zero mismatches, both modes)** — but finds ~141,000 additional
+decisive states per mode that the shipped tables omit, 99.97% of them deep
+(canonical distance ≥ 11, mostly 21+). The omission pattern matches the
+original generator's `drawThreshold`-bounded forward search: lines with long
+no-progress stretches could not be resolved within the bound and were dropped,
+and the reader's miss-means-draw heuristic then silently reports those *wins*
+as *draws*. Shipped distances are also non-canonical (inflated by even
+amounts on ~25-33% of entries; ours are provably fastest-win/slowest-loss).
+Resolution: regenerate the tables with the retrograde generator (Phase 2,
+together with the indexed v4 format).
+
 ## Minor notes
 
 - ~~`checkersUi.js:112` — `if (selectedLocation >= 0)` is true for `null`~~
