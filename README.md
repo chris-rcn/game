@@ -357,10 +357,18 @@ node arena.js --a new --b new --opts-a evalDither=0.003 --opts-b evalDither=0.00
 
 Eval parameters are learned, not assumed: scan candidates head-to-head via
 the arena (`--opts-a`/`--opts-b`) with shared seeded openings in both forced
-modes, then confirm the winner with a large fast-game sample. **Testing at
-depth 4 is the standing protocol** — the early experiments below ran extra
-confirmations at depths 5-6, and the deeper runs matched the depth-4 verdict
-in direction every single time, so they were dropped as not worth their cost.
+modes, then confirm the winner with a large fast-game sample. The original
+standing protocol tested at **depth 4** — the early experiments below ran
+extra confirmations at depths 5-6, and the deeper runs matched the depth-4
+verdict in direction every single time, so they were dropped as not worth
+their cost. **Since the UI switched to node-budget levels, the standing
+protocol player is `nodeLimit=2000, maxDepth=32`** (the measured depth-4
+equivalent), so features are validated under the search dynamics production
+actually uses (iterative deepening, killer move, budget stops); results
+below predate the switch and were measured at fixed depth 4. Known blind
+spot of both protocols: node budgets count nodes, not milliseconds, so a
+per-node-expensive eval term's wall cost is invisible — `--max-seconds`
+runs remain the tool for pricing that when it matters.
 
 ### Learned king value
 
