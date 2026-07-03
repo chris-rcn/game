@@ -116,9 +116,12 @@ CHF.checkers.players = function() {
         pub.homeRowValue = 0.1;
         pub.supportValue = 0; // per friendly piece diagonally behind a pawn
         pub.homeRowFullSupport = false; // back-row pawn counts as 2 supports
+        pub.kingCenterValue = 0; // per edge-distance step (0..3) of each king
+        pub.runawayValue = 0; // per pawn with an enemy-free cone to kinging
         pub.evalFunction = function(game) {
             return game.materialEval(pub.kingValue, pub.rankValue, pub.homeRowValue,
-                pub.supportValue, pub.homeRowFullSupport);
+                pub.supportValue, pub.homeRowFullSupport,
+                pub.kingCenterValue, pub.runawayValue);
         };
         pub.evalDither = 0.001;
         // Extension budget beyond maxDepth while a capture is pending (or

@@ -863,9 +863,44 @@ CHF.checkers = function() {
             return (color & RED) ? rank(loc) : boardSizeM1-rank(loc);
         }
         pub.forwardRank = forwardRank;
-        function materialEval(kingWeight, rankWeight, homeRowBonus, supportBonus, homeRowFullSupport) {
+        function materialEval(kingWeight, rankWeight, homeRowBonus, supportBonus, homeRowFullSupport, kingCenterBonus, runawayBonus) {
             var polarity = turn === BLACK ? 1 : -1;
-            return polarity * (2 * materialEvalBlack(kingWeight, rankWeight, homeRowBonus, supportBonus, homeRowFullSupport) - 1);
+            return polarity * (2 * materialEvalBlack(kingWeight, rankWeight, homeRowBonus, supportBonus, homeRowFullSupport, kingCenterBonus, runawayBonus) - 1);
+        }
+        // Steps from the nearest board edge: 0 (on an edge) .. 3 (the four
+        // center squares).  An edge king has at most half a center king's
+        // moves and is the piece that gets trapped in corners; the cost of
+        // bad king placement cashes in too slowly for the search horizon.
+        function edgeDistance(loc) {
+            var row = rank(loc);
+            var col = (loc - 1) % boardSizeP1;
+            var dr = row < boardSizeM1 - row ? row : boardSizeM1 - row;
+            var dc = col < boardSizeM1 - col ? col : boardSizeM1 - col;
+            return dr < dc ? dr : dc;
+        }
+        // A pawn is a RUNAWAY when no enemy piece stands anywhere in its
+        // forward cone — the set of squares any path to the kinging row can
+        // pass through.  This is a snapshot approximation (enemies can step
+        // into the cone later, and kings can chase from behind), but it is
+        // exactly the future the search horizon cannot see: an uncontested
+        // coronation several plies out.
+        function pawnIsRunaway(loc, color) {
+            var row = rank(loc);
+            var col = (loc - 1) % boardSizeP1;
+            var enemy = (color & RED) ? BLACK : RED;
+            var dir = (color & RED) ? 1 : -1;
+            var steps = (color & RED) ? boardSizeM1 - row : row;
+            for (var k = 1; k <= steps; k++) {
+                var rr = row + dir * k;
+                var c = col - k < 0 ? 0 : col - k;
+                if (((rr + c) & 1) === 0) c++; // playable squares have odd row+col
+                var cEnd = col + k > boardSizeM1 ? boardSizeM1 : col + k;
+                var sq = rr * boardSizeP1 + c + 1;
+                for (; c <= cEnd; c += 2, sq += 2) {
+                    if ((squares[sq] & enemy)) return false;
+                }
+            }
+            return true;
         }
         // A pawn counts 1 + rankWeight * forwardRank (its progress toward
         // kinging) + homeRowBonus if it still guards the back row; folding
@@ -879,11 +914,17 @@ CHF.checkers = function() {
         // row pawn has no behind squares; homeRowFullSupport decides whether
         // that counts as fully supported (it is literally unjumpable) or as
         // nothing (its safety is already priced by homeRowBonus).
-        function materialEvalBlack(kingWeight, rankWeight, homeRowBonus, supportBonus, homeRowFullSupport) {
+        // kingCenterBonus is awarded per edge-distance step (0..3) of each
+        // king, pricing centralization; runawayBonus is awarded to each
+        // runaway pawn (see pawnIsRunaway), pricing a coronation beyond the
+        // horizon at a discount to the kinged difference (kingWeight - 1).
+        function materialEvalBlack(kingWeight, rankWeight, homeRowBonus, supportBonus, homeRowFullSupport, kingCenterBonus, runawayBonus) {
             kingWeight = kingWeight || 2;
             rankWeight = rankWeight || 0;
             homeRowBonus = homeRowBonus || 0;
             supportBonus = supportBonus || 0;
+            kingCenterBonus = kingCenterBonus || 0;
+            runawayBonus = runawayBonus || 0;
             var black = 0;
             var red = 0;
             var blackPawns = 0, redPawns = 0, blackHome = 0, redHome = 0;
@@ -893,6 +934,7 @@ CHF.checkers = function() {
                 loc = checkersColor[i];
                 if ((squares[loc] & KING)) {
                     black += kingWeight;
+                    if (kingCenterBonus) black += kingCenterBonus * edgeDistance(loc);
                 } else {
                     blackPawns++;
                     fr = forwardRank(loc, BLACK);
@@ -904,6 +946,7 @@ CHF.checkers = function() {
                         if ((squares[loc + boardSize] & BLACK)) black += supportBonus;
                         if ((squares[loc + maxDiagonalOffset] & BLACK)) black += supportBonus;
                     }
+                    if (runawayBonus && pawnIsRunaway(loc, BLACK)) black += runawayBonus;
                 }
             }
             checkersColor = checkers[RED];
@@ -911,6 +954,7 @@ CHF.checkers = function() {
                 loc = checkersColor[i];
                 if ((squares[loc] & KING)) {
                     red += kingWeight;
+                    if (kingCenterBonus) red += kingCenterBonus * edgeDistance(loc);
                 } else {
                     redPawns++;
                     fr = forwardRank(loc, RED);
@@ -922,6 +966,7 @@ CHF.checkers = function() {
                         if ((squares[loc - boardSize] & RED)) red += supportBonus;
                         if ((squares[loc - maxDiagonalOffset] & RED)) red += supportBonus;
                     }
+                    if (runawayBonus && pawnIsRunaway(loc, RED)) red += runawayBonus;
                 }
             }
             if (redPawns > 0) black += homeRowBonus * blackHome;
