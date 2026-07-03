@@ -132,9 +132,19 @@ CHF.checkers.players = function() {
         // Rejected candidates (rankValue, supportValue, homeRowFullSupport,
         // runawayGraded) were removed after arena testing; README.md keeps
         // the measurements.
-        pub.evalFunction = function(game) {
-            return game.materialEval(pub.kingValue, pub.homeRowValue,
+        // Per legal move of the SIDE TO MOVE, in final-eval units (the
+        // move list is already generated at every eval site, so mover
+        // mobility is free). Mover-relative is sound under the negamax
+        // perspective convention. Motivated by the dither adoption: the
+        // Beal effect is implicit mobility, so price it explicitly.
+        pub.mobilityValue = 0;
+        pub.evalFunction = function(game, depth, moves) {
+            var e = game.materialEval(pub.kingValue, pub.homeRowValue,
                 pub.kingCenterValue, pub.runawayValue);
+            if (pub.mobilityValue && moves) {
+                e += pub.mobilityValue * moves.length;
+            }
+            return e;
         };
         // Uniform ±d/2 noise on each leaf eval: above the valueDecay
         // tie-break scale, below the learned eval terms. Originally 0.001
