@@ -270,12 +270,14 @@ and the reader's miss-means-draw heuristic then silently reports those *wins*
 as *draws*. Shipped distances are also non-canonical (inflated by even
 amounts on ~25-33% of entries; ours are provably fastest-win/slowest-loss).
 **Fixed by regeneration**: the canonical `end8Forced`/`end8Unforced` are now
-≤4-piece tables produced by the retrograde generator in the indexed v4
-format (see README). Every formerly-missing deep win is decisive, draws are
-explicit and exact (clockless fixpoint semantics), and distances are
+≤3-piece tables produced by the retrograde generator in the compact indexed
+v4 format (411,906 decisive entries per mode vs the originals' 270k/230k —
+the difference is exactly the formerly-missing deep wins). Draws are
+explicit and exact (clockless fixpoint semantics) and distances are
 canonical. The original values live on as `testdata/end8*.v3` fixtures and
-the suite pins the generator against them; arena validation vs those
-fixtures showed a forced-mode strength gain with zero alarms.
+the suite pins the generator against them. A ≤4-piece build was validated
+(+~33 Elo forced, flat unforced) but is not the served default — 19 MB/mode
+vs 651 KB was judged not worth it; it is kept as `end8*.4p` (see README).
 
 ## Minor notes
 
