@@ -136,8 +136,12 @@ CHF.checkers.players = function() {
         // final-eval units. The refined survivor of the rejected mobility
         // idea: slides carry no signal (measured harmful at every weight),
         // but available jumps signal material about to be won — exactly at
-        // the leaves where the quiescence budget ran out.
-        pub.captureThreatValue = 0;
+        // the leaves where the quiescence budget ran out. ADOPTED by arena:
+        // scan single-peaked (0.01 and 0.03 positive all cells, 0.08
+        // collapses to ~36%), 0.03 confirmed at 57.3%/57.3% ± 4.8 vs 0
+        // over 800 games at depth 4 (+51 Elo both modes) — the strongest
+        // confirmed eval term since the back-row bonus.
+        pub.captureThreatValue = 0.03;
         pub.evalFunction = function(game, depth, moves) {
             var e = game.materialEval(pub.kingValue, pub.homeRowValue,
                 pub.kingCenterValue, pub.runawayValue);

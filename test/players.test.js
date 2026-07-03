@@ -16,6 +16,7 @@ function newSearch(depth, opts) {
     s.tablebase = null; // these tests pin raw search; auto-load has its own tests
     s.useTranspositionTable = !!opts.tt; // raw-search pins; TT-on default asserted elsewhere
     s.repetitionDraws = false; // raw-search pins; the on-default has its own tests
+    s.captureThreatValue = 0; // raw-search pins; the adopted default has its own tests
     if (opts.ab === false) s.doAlphaBeta = false;
     if (opts.id) s.useIterativeDeepening = true;
     return s;
@@ -33,6 +34,8 @@ test('Search defaults to the learned king value of 1.4', function () {
     // King centralization: rejected pre-repetition-handling, retested and
     // ADOPTED after it (55.1%/51.0% ± 4.9 vs 0 over 800 depth-4 games).
     assert.strictEqual(s.kingCenterValue, 0.05);
+    // Capture-threat bonus: ADOPTED (57.3%/57.3% ± 4.8 vs 0, 800 games).
+    assert.strictEqual(s.captureThreatValue, 0.03);
     // Runaway pawn bonus: ADOPTED (52.5%/53.3% ± 4.9 vs 0, 800 games).
     assert.strictEqual(s.runawayValue, 0.2);
     // Rejected candidates (rankValue, supportValue, homeRowFullSupport,
@@ -468,8 +471,8 @@ test('captureThreatValue adds a per-available-jump bonus for the mover', functio
     checkers.setForcedJumps(true);
     var g = h.makeGame({ turn: 'black', pieces: { 40: 'b', 32: 'r', 26: 'r' } });
     var moves = g.getMoves();
-    assert.strictEqual(new players.Search(3).captureThreatValue, 0, "gated off by default");
     var s = newSearch(1);
+    s.captureThreatValue = 0;
     var base = s.evalFunction(g, 0, moves);
     s.captureThreatValue = 0.03;
     assert.ok(Math.abs(s.evalFunction(g, 0, moves) - (base + 0.03)) < 1e-12,

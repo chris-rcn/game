@@ -439,8 +439,30 @@ on whose turn the leaf lands on — and with quiescence extending some
 lines and not others, sibling lines are compared at different leaf
 parities, so the term injects parity noise instead of information.
 Forced-jump positions also invert it (a winning capture position
-reports one legal move). Mobility in this engine is best left to the
-dither, which collects the benefit without the bias.
+reports one legal move). Slide mobility in this engine is best left to
+the dither, which collects the benefit without the bias — but the
+capture half of the idea survived, see the next section.
+
+### Adopted: capture-threat bonus (`Search.captureThreatValue = 0.03`)
+
+The refined survivor of the mobility experiment, per review: weight
+captures up and slides to zero. The mover gets 0.03 per available jump
+at eval time (counted from the already-generated move list — jumps
+sort first — so it costs no extra move generation). Available jumps
+signal material about to be won, exactly at the leaves where the
+quiescence budget ran out, making the term a cheap proxy for the
+extension the search could not afford; it also un-inverts the
+one-winning-capture positions the slide count punished. Scan vs 0
+(depth 4, 120/mode, forced/unforced) was single-peaked: 0.01 →
+52.5%/56.3%, **0.03 → 55.0%/56.7%**, 0.08 → 35.8%/35.4% (loud enough
+to out-shout material, the parity bias takes over). Confirmation of
+0.03 at 400 games/mode: **57.3% / 57.3% ± 4.8** (+51 Elo in both
+modes) — the strongest confirmed eval term since the back-row bonus.
+Reproduce with:
+
+```sh
+node arena.js --a new --b new --opts-a captureThreatValue=0.03 --opts-b captureThreatValue=0 --games 400
+```
 
 ### Adopted: back-row pawn bonus (`Search.homeRowValue = 0.1`)
 
