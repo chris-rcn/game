@@ -21,3 +21,4 @@ node arena.js --b snapshots/<name> ...
 | `after-ab-fix` | commit `01a6f86` | above + alpha-beta/decay fix (#7); pre binarySearch fix (#1) |
 | `after-homerow` | commit `b6e4c54` | all fixes + learned kingValue 1.4 + unconditional homeRowValue 0.1; pre opponent-has-pawns condition |
 | `after-eval-tuning` | commit `09d2db7` | full eval tuning (support rejection); pre tablebase distance-decay fix |
+| `pre-runaway` | commit `cca910c` | everything through the v4 tablebase swap, runaway/kingCenter features present but gated off; pre runawayValue 0.2 adoption |

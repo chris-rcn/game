@@ -338,6 +338,42 @@ vs the unconditional version (`snapshots/after-homerow`) it scored 50.6% /
 depth 5 — positive in all four cells (50.9% ± 2.9 pooled), with the effect
 naturally concentrated in the rare kings-only endgames where it fires.
 
+### Adopted: runaway pawn bonus (`Search.runawayValue = 0.2`)
+
+A pawn is a *runaway* when its forward cone — every square any path to the
+kinging row can pass through — contains no enemy piece. That is an
+uncontested coronation sitting beyond the horizon, exactly what a
+fixed-depth search cannot see; the bonus is a discount on the kinging gain
+(kingValue − 1 = 0.4). The cone test is a snapshot approximation (enemies
+can sidestep into the cone, kings can chase from behind), but the arena
+prices the net effect. Scan vs 0 (depth 4, 120/mode, forced/unforced):
+
+| bonus | score | bonus | score |
+|---|---|---|---|
+| 0.1 | 53.8% / 53.8% | 0.3 | 52.9% / 54.2% |
+| **0.2** | **54.6% / 53.3%** | | |
+
+Every candidate won both modes. Confirmation of 0.2: 400 games/mode at
+depth 4 → 52.5% / 53.3% (± 4.9 each; 52.9% ± 3.5 pooled), and kingValue
+1.4 re-verified as stable alongside it (1.2 and 1.6 both fail to beat it
+with the bonus active). Cost: ×1.19 wall time at depth 4 on a midgame
+position sample — the cone scans early-exit on the first enemy hit.
+Reproduce with:
+
+```sh
+node arena.js --a new --b new --opts-a runawayValue=0.2 --opts-b runawayValue=0 --games 400
+```
+
+### Rejected: king centralization bonus (`Search.kingCenterValue`)
+
+Counts each king `kingValue + w × edgeDistance` (0–3 steps from the
+nearest edge), pricing mobility and corner-trappability. No candidate won
+both modes (depth 4, 120/mode): 0.02 → 54.2% / 46.3%, 0.05 → 50.4% /
+50.8%, 0.1 → 50.8% / 49.2%. The likely reason: by the time king placement
+decides games the position is usually inside tablebase coverage, and
+short-range king traps are within the search horizon. The field stays,
+default 0.
+
 ## Tablebase generation (the shipped tables are regenerated ≤3-piece v4)
 
 The original site tablebases covered only **≤3 pieces** (proven by

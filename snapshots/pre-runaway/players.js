@@ -116,18 +116,8 @@ CHF.checkers.players = function() {
         pub.homeRowValue = 0.1;
         pub.supportValue = 0; // per friendly piece diagonally behind a pawn
         pub.homeRowFullSupport = false; // back-row pawn counts as 2 supports
-        // Per edge-distance step (0..3) of each king. Tested and REJECTED:
-        // no candidate (0.02-0.1) won both modes — king placement is mostly
-        // inside tablebase coverage or visible to the search by the time it
-        // matters.
-        pub.kingCenterValue = 0;
-        // Extra worth of a pawn whose forward cone to the kinging row holds
-        // no enemy piece (an uncontested coronation beyond the horizon,
-        // discounted from the kinging gain kingValue-1 = 0.4).  Learned by
-        // arena self-play vs 0: every candidate 0.1-0.3 won BOTH modes;
-        // 0.2 confirmed at 52.5%/53.3% ± 4.9 over 800 games at depth 4,
-        // with kingValue=1.4 re-verified as stable alongside it.
-        pub.runawayValue = 0.2;
+        pub.kingCenterValue = 0; // per edge-distance step (0..3) of each king
+        pub.runawayValue = 0; // per pawn with an enemy-free cone to kinging
         pub.evalFunction = function(game) {
             return game.materialEval(pub.kingValue, pub.rankValue, pub.homeRowValue,
                 pub.supportValue, pub.homeRowFullSupport,
