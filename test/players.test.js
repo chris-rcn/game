@@ -34,6 +34,11 @@ test('Search defaults to the learned king value of 1.4', function () {
     // Back-row bonus was tested and ADOPTED: 59.4% ± 3.4 vs 0 over 800
     // depth-4 games, positive at depth 5, jointly stable with kingValue=1.4.
     assert.strictEqual(s.homeRowValue, 0.1);
+    // King centralization: rejected pre-repetition-handling, retested and
+    // ADOPTED after it (55.1%/51.0% ± 4.9 vs 0 over 800 depth-4 games).
+    assert.strictEqual(s.kingCenterValue, 0.05);
+    // Runaway pawn bonus: ADOPTED (52.5%/53.3% ± 4.9 vs 0, 800 games).
+    assert.strictEqual(s.runawayValue, 0.2);
     // Pawn-support bonus was tested and REJECTED (see README): the natural
     // variant was flat-to-harmful, and the back-row-counts-as-two variant
     // only looked good by leaking extra back-row value — at equal back-row

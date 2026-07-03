@@ -116,11 +116,15 @@ CHF.checkers.players = function() {
         pub.homeRowValue = 0.1;
         pub.supportValue = 0; // per friendly piece diagonally behind a pawn
         pub.homeRowFullSupport = false; // back-row pawn counts as 2 supports
-        // Per edge-distance step (0..3) of each king. Tested and REJECTED:
-        // no candidate (0.02-0.1) won both modes — king placement is mostly
-        // inside tablebase coverage or visible to the search by the time it
-        // matters.
-        pub.kingCenterValue = 0;
+        // Per edge-distance step (0..3) of each king, pricing mobility and
+        // corner-trappability. REJECTED before repetition handling existed
+        // (mixed signs — centralization edges dissipated into shuffling and
+        // adjudicated draws), then RETESTED and ADOPTED once repetitionDraws
+        // gave uncovered endgames fresh-ground exploration to steer: all
+        // scan cells positive under current defaults, 0.05 confirmed at
+        // 55.1%/51.0% ± 4.9 over 800 games at depth 4, kingValue 1.4
+        // re-verified stable alongside it.
+        pub.kingCenterValue = 0.05;
         // Extra worth of a pawn whose forward cone to the kinging row holds
         // no enemy piece (an uncontested coronation beyond the horizon,
         // discounted from the kinging gain kingValue-1 = 0.4).  Learned by

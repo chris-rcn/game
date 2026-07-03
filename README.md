@@ -398,15 +398,26 @@ node arena.js --a new --b new --opts-a runawayValue=0.2 --opts-b runawayValue=0 
 node arena.js --a new --b new --opts-a runawayValue=0.3,runawayGraded=true --games 400
 ```
 
-### Rejected: king centralization bonus (`Search.kingCenterValue`)
+### Adopted after retest: king centralization (`Search.kingCenterValue = 0.05`)
 
 Counts each king `kingValue + w × edgeDistance` (0–3 steps from the
-nearest edge), pricing mobility and corner-trappability. No candidate won
-both modes (depth 4, 120/mode): 0.02 → 54.2% / 46.3%, 0.05 → 50.4% /
-50.8%, 0.1 → 50.8% / 49.2%. The likely reason: by the time king placement
-decides games the position is usually inside tablebase coverage, and
-short-range king traps are within the search horizon. The field stays,
-default 0.
+nearest edge), pricing mobility and corner-trappability. A case study in
+feature interaction: **rejected** when first tested (no candidate won
+both modes — 0.02 → 54.2% / 46.3%, 0.05 → 50.4% / 50.8%, 0.1 → 50.8% /
+49.2%), because at the time the engine still shuffled in
+won-but-uncovered endgames, so any centralization edge dissipated into
+adjudicated draws. After `repetitionDraws` shipped, a pre-removal retest
+under current defaults flipped every cell positive: 0.05 → 52.9% /
+55.8%, 0.1 → 56.3% / 50.4% (120/mode). Confirmation of 0.05: 400
+games/mode → **55.1% / 51.0%** (± 4.9; 53.1% ± 3.5 pooled), with
+kingValue 1.4 re-verified stable alongside it (1.2 and 1.6 lose all four
+joint cells). The anti-shuffle rule makes the engine explore fresh
+ground in uncovered king endgames; centralization tells it which fresh
+ground pays. Reproduce with:
+
+```sh
+node arena.js --a new --b new --opts-a kingCenterValue=0.05 --opts-b kingCenterValue=0 --games 400
+```
 
 ## Tablebase generation (the shipped tables are regenerated ≤4-piece v4)
 
