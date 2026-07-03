@@ -166,6 +166,15 @@ in unforced mode raw depth is marginally more time-efficient but quiescence
 still wins at equal depth. Note: the shipped UI runs `doQuiesce = false` —
 a difficulty decision worth revisiting, since it forfeits ~200 Elo.
 
+The value of a ply diminishes steeply (no quiescence, 400 games/mode,
+forced/unforced): d1→d2 **+920/+1040 Elo** (saturated — a floor; depth 1
+cannot see the opponent's reply and hangs material constantly), d2→d3
++319/+250, d3→d4 +237/+229, d4→d5 +165/+153 — roughly 0.72× per step after
+the first. Quiescence at d4 (+219/+163) is worth more than the uniform
+d4→d5 ply because it extends selectively where the horizon lies. Product
+note: the UI's level ladder is linear in depth but wildly nonlinear in
+strength (level 1→2 ≈ 1000 Elo, level 4→5 ≈ 160).
+
 ### Evaluation tuning protocol
 
 Eval parameters are learned, not assumed: scan candidates head-to-head via
