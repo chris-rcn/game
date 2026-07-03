@@ -358,10 +358,20 @@ depth 4 → 52.5% / 53.3% (± 4.9 each; 52.9% ± 3.5 pooled), and kingValue
 1.4 re-verified as stable alongside it (1.2 and 1.6 both fail to beat it
 with the bonus active). Cost: ×1.19 wall time at depth 4 on a midgame
 position sample — the cone scans early-exit on the first enemy hit.
-Reproduce with:
+
+Graded variant (`runawayGraded=true` scales the bonus by forwardRank/6,
+pricing how *imminent* the coronation is): tested and **rejected**. The
+scan vs flat 0.2 looked mildly promising (w=0.2 → 52.1% / 51.7%, w=0.3 →
+52.1% / 52.9%, w=0.4 → 50.8% / 48.3% over 120/mode), but the 400/mode
+confirmation of w=0.3 came back dead flat: 50.2% / 49.3% ± 4.9. The
+likely reason: near-kinging runaways are already inside the search
+horizon (grading adds nothing there), while distant runaways — where the
+flat bonus does its work steering the midgame — are exactly what grading
+zeroes out. The flag stays, default false. Reproduce with:
 
 ```sh
 node arena.js --a new --b new --opts-a runawayValue=0.2 --opts-b runawayValue=0 --games 400
+node arena.js --a new --b new --opts-a runawayValue=0.3,runawayGraded=true --games 400
 ```
 
 ### Rejected: king centralization bonus (`Search.kingCenterValue`)
