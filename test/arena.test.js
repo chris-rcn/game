@@ -79,6 +79,7 @@ test('new vs baseline shows zero rules divergences; forced mode still ties exact
         a: { engine: 'new', type: 'search', depth: 2,
              searchOptions: { kingValue: 2, useTranspositionTable: false,
                  homeRowValue: 0, runawayValue: 0, // pin learned eval terms off
+                 repetitionDraws: false, // baseline has no line history
                  quiesceDepth: Infinity } }, // baseline's doQuiesce=true is unlimited
         b: { engine: 'baseline', type: 'search', depth: 2 },
         forcedModes: [true, false],

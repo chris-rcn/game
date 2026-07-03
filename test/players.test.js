@@ -15,6 +15,7 @@ function newSearch(depth, opts) {
     s.evalDither = 0; // deterministic
     s.tablebase = null; // these tests pin raw search; auto-load has its own tests
     s.useTranspositionTable = !!opts.tt; // raw-search pins; TT-on default asserted elsewhere
+    s.repetitionDraws = false; // raw-search pins; the on-default has its own tests
     if (opts.ab === false) s.doAlphaBeta = false;
     if (opts.id) s.useIterativeDeepening = true;
     return s;
@@ -320,9 +321,11 @@ test('alpha-beta equals plain negamax across seeded positions and still prunes (
 
 // ---- repetition handling (game-line draws) ----
 
-test('repetitionDraws is present, gated off by default, and resettable', function () {
+test('repetitionDraws is on by default and resettable', function () {
+    // Adopted: cannot cost a win, ends the shuffle failure mode, and the
+    // arena confirmed 52.5%/51.5% ± 4.9 vs off (400 games/mode, depth 4).
     var s = new players.Search(3);
-    assert.strictEqual(s.repetitionDraws, false);
+    assert.strictEqual(s.repetitionDraws, true);
     assert.strictEqual(typeof s.clearLineHistory, 'function');
     s.clearLineHistory(); // callable before any search
 });

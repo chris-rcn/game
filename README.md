@@ -181,6 +181,31 @@ blind); homeRow 0.1 vs 0 → 61.6% / 59.3% (confirmed, was 59.1/59.8);
 rank bonus 0.01 → 45.0% / 43.3% (still rejected); support 0.025+fullHome vs
 equal back-row raise → 49.0% / 43.3% over 200/mode (still rejected).
 
+### Repetition handling (`Search.repetitionDraws`, on by default)
+
+The game deliberately has no repetition rule, but revisiting a position
+already seen in the actual game line has provably achieved nothing — any
+win available at the revisit was available at the first visit. The search
+therefore scores any in-tree return to a previously faced position (or to
+an ancestor on the current search line) as a draw (0): the side that is
+ahead steers away from shuffling, the side that is behind steers toward
+it. The check runs before the transposition table and tablebase reads
+(the draw score is path-dependent, so neither cache may override it), and
+line history resets automatically when a new game is detected (checker
+count rises) or explicitly via `clearLineHistory()` (the UI calls it on
+new game and undo).
+
+This closes the engine's shuffle failure mode in won-but-beyond-horizon
+endgames: in the pinned 2-kings-vs-1 test with the tablebase off, the
+deterministic depth-4 search repeats 24 faced positions in 60 plies
+without the flag and **zero** with it. Arena, on vs off (depth 4, 400
+games/mode): 52.5% / 51.5% ± 4.9 (52.0% ± 3.5 pooled) — a small gain on
+top of the behavioral fix. Reproduce with:
+
+```sh
+node arena.js --a new --b new --opts-b repetitionDraws=false --games 400
+```
+
 ### Search characteristics (measured)
 
 At depth 4 with current defaults: quiescence is worth **+219 Elo forced /
