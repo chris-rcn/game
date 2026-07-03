@@ -77,7 +77,8 @@ test('new vs baseline shows zero rules divergences; forced mode still ties exact
     var match = arena.playMatch({
         games: 4, depth: 2, seed: 5,
         a: { engine: 'new', type: 'search', depth: 2,
-             searchOptions: { kingValue: 2, useTranspositionTable: false } },
+             searchOptions: { kingValue: 2, useTranspositionTable: false,
+                 quiesceDepth: Infinity } }, // baseline's doQuiesce=true is unlimited
         b: { engine: 'baseline', type: 'search', depth: 2 },
         forcedModes: [true, false],
         drawPlies: 40, maxPlies: 200, openingPlies: 6, tablebase: false

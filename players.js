@@ -118,9 +118,11 @@ CHF.checkers.players = function() {
         // Extension budget beyond maxDepth while a capture is pending (or
         // the move is forced): 0 = none (evaluate at the bare horizon),
         // Infinity = extend until quiet.  Generalizes the old doQuiesce
-        // boolean (false ≡ 0, true ≡ Infinity) so intermediate strengths
-        // exist between "horizon-blind" and "full quiescence".
-        pub.quiesceDepth = Infinity;
+        // boolean (false ≡ 0, true ≡ Infinity).  Default 1 is the measured
+        // best Elo-per-time in both modes (+232/+129 per doubling at depth
+        // 4); at FIXED depth more budget is stronger — set Infinity for
+        // full quiescence.
+        pub.quiesceDepth = 1;
         pub.doAlphaBeta = true;
         pub.evalCounter = 0;
         // On by default since the depth-comparison fix (BUGS.md #4):

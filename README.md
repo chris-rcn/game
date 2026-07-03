@@ -168,8 +168,13 @@ fully off, forfeiting ~200 Elo; it now plays `quiesceDepth = 1` — see below.)
 
 `doQuiesce` was converted to a graded budget, `Search.quiesceDepth`: the
 number of plies past the horizon the search may extend while a capture is
-pending (or the move is forced). 0 ≡ the old `false`, Infinity (the default)
-≡ the old `true`, and intermediate values are new strength rungs. Measured
+pending (or the move is forced). 0 ≡ the old `false`, Infinity ≡ the old
+`true`, and intermediate values are new strength rungs. **The default is 1
+everywhere — engine, arena players, and UI** — the measured best
+Elo-per-time configuration; note that at *fixed* depth more budget is
+stronger (Infinity beats 1 by ~+135/+33 Elo chained), so set
+`quiesceDepth=Infinity` when comparing at equal depth rather than equal
+time. Measured
 ladder at depth 4 (forced/unforced, warmed best-of-3 costs): qd0→qd1
 **+172/+117 Elo** for ×1.67/×1.88 time; qd1→qd2 +76/+19 for ×1.20/×1.27;
 qd2→∞ +60/+14 for ×1.11/×1.56. The first budget ply delivers +232/+129 Elo

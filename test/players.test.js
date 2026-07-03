@@ -47,8 +47,9 @@ test('Search defaults to the learned king value of 1.4', function () {
     // ~17% faster with even one side using it.
     assert.strictEqual(s.useTranspositionTable, true);
     // doQuiesce was converted to a graded extension budget: 0 ≡ old false,
-    // Infinity ≡ old true, intermediate values are new difficulty rungs.
-    assert.strictEqual(s.quiesceDepth, Infinity);
+    // Infinity ≡ old true. Default 1 = the measured best Elo-per-time
+    // configuration (engine, arena, and UI all agree on it).
+    assert.strictEqual(s.quiesceDepth, 1);
     assert.strictEqual(s.doQuiesce, undefined);
 });
 
