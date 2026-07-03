@@ -494,3 +494,63 @@ test('generator reproduces shipped values for the 2-piece space (fast slice of t
     var g = helpers.makeGame({ turn: 'red', pieces: { 40: 'B' } });
     assert.deepStrictEqual(tb.getEntry(g.hashBase(), 99), { v: -1, d: 0 });
 });
+
+// ---- v4 "CHFI" dense-indexed format ----
+
+test('tablebaseRank is a collision-free dense index over base states', function () {
+    var gen = require('../tools/generate-tablebase.js');
+    var seen = new Set();
+    var slots = checkers.tablebaseSlotCount(2);
+    var count = 0;
+    gen.enumerateStates(2, function (game) {
+        if (game.getJumpContinuationLoc() !== 0) {
+            assert.strictEqual(checkers.tablebaseRank(game, 2), -1, "mid-jump states are not ranked");
+            return;
+        }
+        if (game.getCheckerCount() < 2) {
+            // Elimination terminals are answered by the search's no-moves
+            // path, not stored, hence not rankable.
+            assert.strictEqual(checkers.tablebaseRank(game, 2), -1);
+            return;
+        }
+        var rank = checkers.tablebaseRank(game, 2);
+        assert.ok(rank >= 0 && rank < slots, "rank in range: " + rank);
+        assert.ok(!seen.has(rank), "rank collision at " + rank);
+        seen.add(rank);
+        count++;
+    });
+    assert.strictEqual(count, 6976, "mixed-color 2-piece base states, both turns");
+    // Out-of-coverage piece counts rank as -1.
+    var big = require('./helpers.js').makeGame({ turn: 'black', pieces: { 40: 'b', 48: 'b', 20: 'r' } });
+    assert.strictEqual(checkers.tablebaseRank(big, 2), -1);
+});
+
+test('TablebaseV4 probe round-trips through a synthetic table', function () {
+    var helpers = require('./helpers.js');
+    var maxPieces = 2;
+    var slots = checkers.tablebaseSlotCount(maxPieces);
+    var buffer = new ArrayBuffer(16 + slots);
+    new Uint8Array(buffer, 16, slots).fill(255);
+    new Uint32Array(buffer, 0, 4).set(new Uint32Array(checkers.buildTablebaseV4Header(true, maxPieces)));
+    var g = helpers.makeGame({ turn: 'black', pieces: { 40: 'B', 2: 'R' } });
+    var data = new Uint8Array(buffer, 16, slots);
+    data[checkers.tablebaseRank(g, maxPieces)] = ((1 + 1) << 6) | 17;   // win in 17
+    var draw = helpers.makeGame({ turn: 'red', pieces: { 40: 'B', 2: 'R' } });
+    data[checkers.tablebaseRank(draw, maxPieces)] = 64;                 // explicit draw
+    var tb = new checkers.TablebaseV4(buffer);
+    assert.deepStrictEqual(tb.probe(g), { v: 1, d: 17 });
+    assert.deepStrictEqual(tb.probe(draw), { v: 0, d: 0 });
+    var absent = helpers.makeGame({ turn: 'black', pieces: { 40: 'B', 4: 'R' } });
+    assert.strictEqual(tb.probe(absent), null, "255 means no entry");
+    var tooBig = helpers.makeGame({ turn: 'black', pieces: { 40: 'b', 48: 'b', 20: 'r' } });
+    assert.strictEqual(tb.probe(tooBig), null, "outside coverage");
+    assert.strictEqual(tb.getStats().forcedJumps, true);
+    assert.strictEqual(tb.getStats().maxPieces, 2);
+    assert.strictEqual(tb.getStats().size, 1, "one decisive entry (draws not counted)");
+    // openTablebase sniffs both formats.
+    assert.ok(checkers.openTablebase(buffer).probe, "v4 detected by magic");
+    assert.ok(checkers.openTablebase(buildTablebase([{ h0: 9, h1: 9, v: 1, d: 1 }])).getEntry,
+        "legacy still opens as ResultList2");
+    // Truncation is rejected.
+    assert.throws(function () { new checkers.TablebaseV4(buffer.slice(0, 1000)); }, /slots|version|CHFI/);
+});

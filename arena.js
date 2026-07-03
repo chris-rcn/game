@@ -115,8 +115,7 @@ function loadArenaTablebase(forced) {
         var file = path.join(__dirname, forced ? 'end8Forced' : 'end8Unforced');
         try {
             var raw = fs.readFileSync(file);
-            var ResultList2 = loadEngine('new').checkers.ResultList2;
-            tablebaseCache[key] = new ResultList2(
+            tablebaseCache[key] = loadEngine('new').checkers.openTablebase(
                 raw.buffer.slice(raw.byteOffset, raw.byteOffset + raw.byteLength));
         } catch (e) {
             console.error("tablebase " + file + " unavailable (" + e.message + "); playing without it");
@@ -142,8 +141,11 @@ function makePlayer(spec, tablebase) {
         inner = new engine.players.Search(spec.depth, spec.maxSeconds);
         // Always explicit: the shared instance when on, null when off —
         // never the engine's Node auto-load, which would defeat
-        // --no-tablebase and double-load the files.
-        inner.tablebase = tablebase || null;
+        // --no-tablebase and double-load the files. Probe-only (v4) readers
+        // are withheld from engine versions that only speak getEntry(hash).
+        var usable = tablebase &&
+            (engine.players.tablebaseProbe || typeof tablebase.getEntry === 'function');
+        inner.tablebase = usable ? tablebase : null;
         var optKeys = Object.keys(spec.searchOptions || {});
         optKeys.forEach(function (key) {
             if (!(key in inner)) {

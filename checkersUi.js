@@ -353,7 +353,7 @@ CHF.checkers.ui = function() {
             }
             var tb;
             try {
-                tb = new checkers.ResultList2(request.response);
+                tb = checkers.openTablebase(request.response);
             } catch (e) {
                 log("Tablebase '{}' rejected: {}", fileName, e.message);
                 return;

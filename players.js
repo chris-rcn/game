@@ -18,6 +18,12 @@ CHF.checkers.players = function() {
 
     var isJumpMove = checkers.isJump;
 
+    // Capability marker: this Search understands tablebase readers that
+    // expose probe(game) (the v4 indexed format) in addition to legacy
+    // getEntry(hash) readers. Harnesses use it to gate what they inject
+    // into older engine versions.
+    pub.tablebaseProbe = true;
+
     // Canonical endgame tablebases, auto-loaded per mode under Node (the
     // browser cannot load synchronously; checkersUi injects after its async
     // fetch). Lazy, cached, and silent when the files are absent.
@@ -30,7 +36,7 @@ CHF.checkers.players = function() {
                 var fs = require('fs');
                 var path = require('path');
                 var raw = fs.readFileSync(path.join(__dirname, forced ? 'end8Forced' : 'end8Unforced'));
-                nodeTablebases[key] = new checkers.ResultList2(
+                nodeTablebases[key] = checkers.openTablebase(
                     raw.buffer.slice(raw.byteOffset, raw.byteOffset + raw.byteLength));
             } catch (e) {
                 // stay null: engine plays without a tablebase
@@ -176,7 +182,8 @@ CHF.checkers.players = function() {
             }
 
             if (activeTablebase && depth > 0) {
-                var tbEntry = activeTablebase.getEntry(hash);
+                var tbEntry = activeTablebase.probe ?
+                    activeTablebase.probe(game) : activeTablebase.getEntry(hash);
                 if (tbEntry) {
                     // Decay by distance-to-result so tablebase hits carry a
                     // conversion gradient in the search's own tie-break

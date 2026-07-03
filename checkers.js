@@ -235,6 +235,139 @@ CHF.checkers = function() {
     }
     pub.ResultList2 = ResultList2;
 
+    // ---- v4 "CHFI" dense-indexed tablebase ----
+    // Header (16 bytes): u32 magic 'CHFI' | u32 version=1 | u32 flags
+    // (bit0 = jumpsAreForced) | u32 maxPieces.  Data: one byte per base
+    // position (jumpContinuationLoc = 0), sections k = 2..maxPieces, each of
+    // 2 * C(32,k) * 4^k slots addressed by tablebaseRank below.  Byte 255 =
+    // no entry (invalid slot, or piece counts outside coverage); otherwise
+    // the v3 resultAndDist encoding ((v+1)<<6 | d), so a draw is stored
+    // explicitly as 64.  Mid-jump states are not stored: the search recurses
+    // through the short forced continuation to the next base position.
+    var TB4_MAGIC = 0x49464843; // 'C','H','F','I' little-endian
+    var TB4_VERSION = 1;
+    var TB4_HEADER_BYTES = 16;
+
+    var binomial = [];
+    (function () {
+        for (var n = 0; n <= 32; n++) {
+            binomial[n] = [];
+            for (var k = 0; k <= 6; k++) {
+                binomial[n][k] = (k === 0) ? 1 :
+                    (n === 0) ? 0 : binomial[n-1][k-1] + binomial[n-1][k];
+            }
+        }
+    })();
+
+    function tb4SectionSlots(k) {
+        return 2 * binomial[32][k] * Math.pow(4, k);
+    }
+    function tb4SectionOffset(k) {
+        var offset = 0;
+        for (var j = 2; j < k; j++) offset += tb4SectionSlots(j);
+        return offset;
+    }
+    function tablebaseSlotCount(maxPieces) {
+        return tb4SectionOffset(maxPieces + 1);
+    }
+    pub.tablebaseSlotCount = tablebaseSlotCount;
+
+    // Dense rank of a base position (jumpContinuationLoc must be 0) within a
+    // <=maxPieces table, or -1 when outside the addressable space.
+    function tablebaseRank(game, maxPieces) {
+        if (game.getJumpContinuationLoc() !== 0) return -1;
+        var k = game.getCheckerCount();
+        if (k < 2 || k > maxPieces) return -1;
+        var idx = [];
+        var digitOf = {};
+        game.eachPiece(function (loc, piece) {
+            var si = squareIndexLookups.squareToIndex[loc];
+            idx.push(si);
+            digitOf[si] = ((piece & RED) ? 2 : 0) + ((piece & KING) ? 1 : 0);
+        });
+        idx.sort(function (a, b) { return a - b; });
+        var comboRank = 0, digits = 0, pow = 1;
+        for (var i = 0; i < k; i++) {
+            comboRank += binomial[idx[i]][i + 1];
+            digits += digitOf[idx[i]] * pow;
+            pow *= 4;
+        }
+        var turnBit = game.turnIsBlack() ? 0 : 1;
+        return tb4SectionOffset(k) + (comboRank * pow + digits) * 2 + turnBit;
+    }
+    pub.tablebaseRank = tablebaseRank;
+
+    function TablebaseV4(buffer, byteLength) {
+        var pub = this;
+        if (byteLength == null) {
+            byteLength = buffer.byteLength;
+        }
+        var header = new Uint32Array(buffer, 0, 4);
+        assert(header[0] === TB4_MAGIC, "not a CHFI tablebase");
+        if (header[1] !== TB4_VERSION) {
+            throw new Error(fmt("Unsupported CHFI tablebase version {}", header[1]));
+        }
+        var flags = header[2];
+        var maxPieces = header[3];
+        var slots = tablebaseSlotCount(maxPieces);
+        if (byteLength !== TB4_HEADER_BYTES + slots) {
+            throw new Error(fmt("CHFI header says maxPieces={} ({} slots) but file has {} data bytes",
+                maxPieces, slots, byteLength - TB4_HEADER_BYTES));
+        }
+        var data = new Uint8Array(buffer, TB4_HEADER_BYTES, slots);
+        var cachedSize = -1;
+
+        function probe(game) {
+            var rank = tablebaseRank(game, maxPieces);
+            if (rank < 0) return null;
+            var b = data[rank];
+            if (b === 255) return null;
+            var d = b & 63;
+            return { v: ((b - d) >> 6) - 1, d: d };
+        }
+        pub.probe = probe;
+
+        function getStats() {
+            if (cachedSize < 0) {
+                cachedSize = 0;
+                for (var i = 0; i < slots; i++) {
+                    if (data[i] !== 255 && data[i] !== 64) cachedSize++;
+                }
+            }
+            return {
+                size: cachedSize,
+                maxPieces: maxPieces,
+                forcedJumps: (flags & TB_FLAG_FORCED) !== 0
+            };
+        }
+        pub.getStats = getStats;
+
+        pub.rawData = function () { return data; };
+        pub.getMaxPieces = function () { return maxPieces; };
+    }
+    pub.TablebaseV4 = TablebaseV4;
+
+    function buildTablebaseV4Header(forcedJumps, maxPieces) {
+        var buffer = new ArrayBuffer(TB4_HEADER_BYTES);
+        var header = new Uint32Array(buffer);
+        header[0] = TB4_MAGIC;
+        header[1] = TB4_VERSION;
+        header[2] = forcedJumps ? TB_FLAG_FORCED : 0;
+        header[3] = maxPieces;
+        return buffer;
+    }
+    pub.buildTablebaseV4Header = buildTablebaseV4Header;
+
+    // Open a tablebase buffer of any supported format.
+    function openTablebase(buffer, byteLength) {
+        var len = byteLength == null ? buffer.byteLength : byteLength;
+        if (len >= TB4_HEADER_BYTES && new Uint32Array(buffer, 0, 1)[0] === TB4_MAGIC) {
+            return new TablebaseV4(buffer, len);
+        }
+        return new ResultList2(buffer, len);
+    }
+    pub.openTablebase = openTablebase;
+
     // entries: [{h0, h1Hi, h1Lo, resultAndDist}] sorted by h0 ascending.
     function buildTablebaseV3(entries, forcedJumps) {
         var n = entries.length;
@@ -805,6 +938,19 @@ CHF.checkers = function() {
             return turn === BLACK;
         }
         pub.turnIsBlack = turnIsBlack;
+
+        function eachPiece(cb) {
+            var i, checkersColor;
+            checkersColor = checkers[BLACK];
+            for (i=0; i<checkersColor.length; i++) {
+                cb(checkersColor[i], squares[checkersColor[i]]);
+            }
+            checkersColor = checkers[RED];
+            for (i=0; i<checkersColor.length; i++) {
+                cb(checkersColor[i], squares[checkersColor[i]]);
+            }
+        }
+        pub.eachPiece = eachPiece;
 
         pub.makeMove = makeMove;
         pub.isBlack = isBlack;
