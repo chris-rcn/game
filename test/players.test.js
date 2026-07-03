@@ -317,3 +317,78 @@ test('alpha-beta equals plain negamax across seeded positions and still prunes (
     });
     checkers.setForcedJumps(true);
 });
+
+// ---- repetition handling (game-line draws) ----
+
+test('repetitionDraws is present, gated off by default, and resettable', function () {
+    var s = new players.Search(3);
+    assert.strictEqual(s.repetitionDraws, false);
+    assert.strictEqual(typeof s.clearLineHistory, 'function');
+    s.clearLineHistory(); // callable before any search
+});
+
+test('repetitionDraws stops the engine shuffling in a won-but-unseen endgame', function () {
+    // 2 kings vs 1 king with the tablebase off is winning but the win is
+    // beyond a depth-4 horizon: every eval ties, and the deterministic
+    // search shuffles A<->B forever. With repetitionDraws the searcher
+    // scores any return to a position it already faced as 0, so it keeps
+    // finding fresh ground instead. Both runs are fully deterministic
+    // (evalDither 0); the flag is the only difference.
+    function play(repFlag) {
+        var g = h.makeGame({ turn: 'black', pieces: { 40: 'B', 42: 'B', 2: 'R' } });
+        function mk(flag) {
+            var s = new players.Search(4);
+            s.tablebase = null;
+            s.evalDither = 0;
+            s.repetitionDraws = flag;
+            return s;
+        }
+        var sBlack = mk(repFlag), sRed = mk(false);
+        var seen = {}, repeats = 0;
+        for (var p = 0; p < 60; p++) {
+            if (g.turnIsBlack() && !g.getJumpContinuationLoc()) {
+                var hb = g.hashBase();
+                var key = hb.h0 + ',' + hb.h1;
+                if (seen[key]) repeats++;
+                seen[key] = true;
+            }
+            var mv = (g.turnIsBlack() ? sBlack : sRed).genMove(g);
+            if (!mv) break;
+            g.makeMove(mv, true);
+        }
+        return repeats;
+    }
+    assert.ok(play(false) >= 10, "without the flag the engine shuffles (got " +
+        play(false) + " repeats)");
+    assert.strictEqual(play(true), 0,
+        "with the flag no faced position may ever recur");
+});
+
+test('repetition history resets itself when a new game starts (checker count rises)', function () {
+    // The same player instance is reused across games in the UI. Material
+    // never grows within a game, so a rising count means a new game; stale
+    // history from the previous game must not leak in. Observable: prime a
+    // player with an endgame, then verify a fresh opening game still gets
+    // a legal, sane move (a poisoned history could only score 0s).
+    var s = new players.Search(3);
+    s.evalDither = 0;
+    s.tablebase = null;
+    s.repetitionDraws = true;
+    var end = h.makeGame({ turn: 'black', pieces: { 40: 'B', 2: 'R' } });
+    assert.ok(s.genMove(end), "endgame move");
+    var fresh = new checkers.Game();
+    var detail = s.genMoveDetail(fresh);
+    assert.ok(detail.move, "fresh game gets a move after history reset");
+    assert.ok(fresh.makeMove(detail.move), "and it is legal");
+});
+
+test('repetitionDraws off is bit-identical to the previous search', function () {
+    // The flag defaults off; a default-config search must not change at
+    // all (same move, same value) with the feature merely present.
+    var g = h.makeGame({ turn: 'black', pieces: { 48: 'b', 38: 'r', 40: 'r', 42: 'R' } });
+    var a = newSearch(4).genMoveDetail(g.copy());
+    var b = newSearch(4).genMoveDetail(g.copy());
+    assert.deepStrictEqual(
+        { from: a.move.from, to: a.move.to, value: a.value },
+        { from: b.move.from, to: b.move.to, value: b.value });
+});

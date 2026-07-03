@@ -207,6 +207,7 @@ CHF.checkers.ui = function() {
     function newGame() {
         animatingMove = null;
         ignoreButtons = false;
+        player.clearLineHistory(); // repetition history is per game line
         game = new checkers.Game();
         //game.randomBoard(2, true);
         setSelectedLocation(null);
@@ -248,6 +249,7 @@ CHF.checkers.ui = function() {
     }
     function undo() {
         animatingMove = null;
+        player.clearLineHistory(); // abandoned-line positions must not linger
         if (computerPlaysBlack && computerPlaysRed) {
             computerPlaysRed = false;
         }

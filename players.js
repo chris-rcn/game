@@ -151,6 +151,23 @@ CHF.checkers.players = function() {
         pub.typicalDepth = new common.IirFilter(1);
         pub.useIterativeDeepening = false;
         pub.useKillerMove = true;
+        // The game has no repetition rule (draws are positional facts), but
+        // returning to a position already seen in the actual game line has
+        // provably achieved nothing: any win available now was available at
+        // the first visit.  With repetitionDraws on, the search scores any
+        // in-tree return to a previously faced position (or to an ancestor
+        // on the current search line) as a draw (0) — the side that is
+        // ahead steers away from shuffling, the side that is behind steers
+        // toward it, which is the correct game-theoretic posture for both.
+        pub.repetitionDraws = false;
+        var lineHistory = {};
+        var linePath = [];
+        var lineCheckerCount = Infinity;
+        function clearLineHistory() {
+            lineHistory = {};
+            lineCheckerCount = Infinity;
+        }
+        pub.clearLineHistory = clearLineHistory;
         var transpositionTable;
         var TT_EXACT = 0;
         var TT_LOWERBOUND = 1;
@@ -166,6 +183,21 @@ CHF.checkers.players = function() {
             var alphaOrig = alpha;
             var result = {};
             var hash = game.hashBase();
+            // Repetition check comes BEFORE the transposition table and the
+            // tablebase: the draw score is path-dependent (it exists because
+            // of where the game has already been), so neither cache may
+            // override it.  Skipped at the root, where a move must be chosen.
+            var repetitionKey = null;
+            if (pub.repetitionDraws) {
+                repetitionKey = hash.h0 + "," + hash.h1;
+                if (depth > 0 &&
+                        (lineHistory[repetitionKey] || linePath.indexOf(repetitionKey) >= 0)) {
+                    result.value = 0;
+                    result.valueIsKnown = false;
+                    result.distanceFromRoot = depth;
+                    return result;
+                }
+            }
             // Entries are keyed on remaining search depth below the node, not
             // distance from the root: a cached value is reusable only if it
             // was searched at least as deep as this node needs.  Nodes at or
@@ -265,6 +297,9 @@ CHF.checkers.players = function() {
             }
             result.value = -1e9;
             result.distanceFromRoot = 1e9;
+            if (repetitionKey !== null) {
+                linePath.push(repetitionKey); // on-path for the subtree below
+            }
             //logIndented(depth, fmt("{} has {} options", game.turnIsBlack() ? "Black" : "Red", moves.length));
             for (m=0; m<moves.length; m++) {
                 var move = moves[m];
@@ -300,6 +335,9 @@ CHF.checkers.players = function() {
                     }
                 }
             }
+            if (repetitionKey !== null) {
+                linePath.pop();
+            }
             if (standPat !== null && standPat > result.value) {
                 result.value = standPat;
                 result.move = null;
@@ -334,6 +372,20 @@ CHF.checkers.players = function() {
             // Resolve per call so a mode change picks up the right table.
             activeTablebase = pub.tablebase !== undefined ? pub.tablebase :
                 (common.isNodeJs() ? loadNodeTablebase(checkers.getForcedJumps()) : null);
+            if (pub.repetitionDraws) {
+                // Material never grows within a game, so a rising checker
+                // count means a new game (or an undo): stale line history
+                // would poison it with positions from an abandoned line.
+                // Drivers that reuse a player can also clearLineHistory().
+                var checkerCount = game.getCheckerCount();
+                if (checkerCount > lineCheckerCount) {
+                    clearLineHistory();
+                }
+                lineCheckerCount = checkerCount;
+                var rootHash = game.hashBase();
+                lineHistory[rootHash.h0 + "," + rootHash.h1] = true;
+                linePath = [];
+            }
             if (pub.useIterativeDeepening || maxSeconds > 0) {
                 var limitSec = maxSeconds > 0 ? 0.4 * maxSeconds : Infinity;
                 var killer = null;
