@@ -234,15 +234,22 @@ since it buys exactly the refutation one ply past the horizon. (Earlier
 ×2.4/×4.3 full-quiescence cost figures were JIT-warmup-inflated; warmed
 costs are ×2.2/×3.7.)
 
-### UI levels are node budgets (`nodeLimit = 12 × 2^(level−1)`)
+### UI levels are node budgets (`nodeLimit = 20 × 2^(level−1)`)
 
 UI levels meter thinking *effort*, not lookahead: level N gives the
-engine a budget of `12 × 2^(level−1)` nodes per move (`Search.nodeLimit`
+engine a budget of `20 × 2^(level−1)` nodes per move (`Search.nodeLimit`
 riding iterative deepening; `maxDepth = 32` remains only a hard cap so
-tablebase-covered positions cannot deepen without bound). The anchor 12
-is the measured average cost of a depth-1 search including its
-quiescence bonus (12.26 forced / 12.58 unforced nodes per move over 60
-games), so **level 1 plays essentially the old depth-1 level**, and each
+tablebase-covered positions cannot deepen without bound). The anchor is
+the measured average cost of a depth-1 search including its quiescence
+bonus (12.26 forced / 12.58 unforced nodes per move over 60 games),
+rounded up to 20. Two fixes made level 2 a real rung: anchored at
+exactly 12, level 2's budget (24) fell short of the measured full
+depth-2 cost (~26 nodes), and the deepening predictor's initial growth
+guess of 3× additionally refused the second iteration even at budget
+40 — both measured as a dead rung (+20/+3 Elo, then +26/+35). With the
+20 anchor and the initial guess lowered to the clamp floor (2×, near
+the measured ~1.4× depth-1→2 increment), L1→L2 measures **+114/+117**.
+**Level 1 still plays essentially the old depth-1 level**, and each
 level doubles the budget from there. Budgets are device-independent and
 deterministic — unlike time limits, the same level plays identically on
 any hardware — and they self-allocate: the same spend searches deeper
@@ -250,9 +257,13 @@ where subtrees are cheap (forced sequences, tablebase-covered regions)
 and shallower in expensive quiet positions, which also compresses the
 worst-case-to-median move-time ratio from the depth ladder's 12–16× to
 4–7×. Calibration: budget ≈ depth equivalents measured at 30 ≈ d1,
-100 ≈ d2, 2000 ≈ d4, ~4500 ≈ d5, ~10000 ≈ d6 (so the doubling ladder
-crosses old depth N around level 1.6N − 1.6, reaching d6 strength near
-level 11 with headroom above that the depth ladder could not afford).
+100 ≈ d2, 2000 ≈ d4, ~4500 ≈ d5, ~10000 ≈ d6, so the doubling ladder
+reaches d6 strength near level 10 with headroom above that the depth
+ladder could not afford. Measured steps (120/mode,
+forced/unforced): 20→40 +114/+117 (post-fix), and on the 12-anchored
+scale 24→48 +86/+117, 48→96 +176/+165, 96→192 +124/+76 — a ~+100 Elo
+average step, half the old depth ladder's, spanning in five levels
+what depth spanned in three.
 
 The previous depth-based ladder (levels = pure depth at the engine
 default `quiesceDepth = 1`) measured L1→L2 +255/+207, L2→L3 +207/+225,

@@ -423,10 +423,14 @@ CHF.checkers.players = function() {
                         var budgetExhausted = false;
                         if (pub.nodeLimit > 0) {
                             // Predict the next iteration from the observed
-                            // growth ratio (default 3 before one exists,
-                            // clamped to [2, 8] against quiescence noise).
+                            // growth ratio, clamped to [2, 8] against
+                            // quiescence noise; before a ratio exists, use
+                            // the clamp floor (the measured depth-1 -> 2
+                            // increment is ~1.4x, and a default of 3 made
+                            // the level-2 budget refuse an affordable
+                            // second iteration).
                             var growth = prevIterNodes > 0 ?
-                                Math.min(8, Math.max(2, iterNodes / prevIterNodes)) : 3;
+                                Math.min(8, Math.max(2, iterNodes / prevIterNodes)) : 2;
                             budgetExhausted = nodeCount + iterNodes * growth > pub.nodeLimit;
                         }
                         if (budgetExhausted || common.elapsedSec(startMs) > limitSec ||
