@@ -257,7 +257,7 @@ because the other search bugs are gated off by default (#4 needs
 `useTranspositionTable`, #5 needs iterative deepening) or are ~1e-5 noise (#7).
 The bug remains present in `baseline/players.js` for arena comparison.
 
-### 12. Shipped tablebases misclassify deep decisive endgames as draws — data files
+### 12. ~~Shipped tablebases misclassify deep decisive endgames as draws~~ FIXED — data files
 Discovered while validating the new generator (`tools/generate-tablebase.js`)
 against the shipped tables. An independent layered-retrograde solve of the
 complete ≤3-piece space agrees with **every one of the 500,334 shipped entries
@@ -269,8 +269,13 @@ no-progress stretches could not be resolved within the bound and were dropped,
 and the reader's miss-means-draw heuristic then silently reports those *wins*
 as *draws*. Shipped distances are also non-canonical (inflated by even
 amounts on ~25-33% of entries; ours are provably fastest-win/slowest-loss).
-Resolution: regenerate the tables with the retrograde generator (Phase 2,
-together with the indexed v4 format).
+**Fixed by regeneration**: the canonical `end8Forced`/`end8Unforced` are now
+≤4-piece tables produced by the retrograde generator in the indexed v4
+format (see README). Every formerly-missing deep win is decisive, draws are
+explicit and exact (clockless fixpoint semantics), and distances are
+canonical. The original values live on as `testdata/end8*.v3` fixtures and
+the suite pins the generator against them; arena validation vs those
+fixtures showed a forced-mode strength gain with zero alarms.
 
 ## Minor notes
 

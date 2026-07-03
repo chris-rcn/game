@@ -12,6 +12,11 @@ var path = require('path');
 var checkers = require(path.join(__dirname, '..', 'checkers.js'));
 
 function convertBuffer(buffer, forcedJumps) {
+    if (new DataView(buffer).getUint32(0, true) === 0x49464843) { // "CHFI"
+        throw new Error("input is a v4 (CHFI) indexed table; this tool " +
+            "converts hash-keyed formats only — regenerate with " +
+            "tools/generate-tablebase.js --v3 instead");
+    }
     var src = new checkers.ResultList2(buffer);
     var n = src.getStats().size;
     var entries = new Array(n);

@@ -16,17 +16,42 @@ Original site files (unmodified):
 | `players.js` | Players: random rollouts and a negamax search with alpha-beta, quiescence, iterative deepening |
 | `checkersUi.js` | Canvas UI (browser only) |
 | `board.jpg` | Board artwork |
-| `end8Forced`, `end8Unforced` | Endgame tablebases in the v3 "CHFT" headered format (converted from the site originals; 11% and 8x smaller respectively) |
+| `end8Forced`, `end8Unforced` | Endgame tablebases: regenerated **≤4-piece** tables in the v4 "CHFI" indexed format (19.1 MB each) |
 | `testdata/end8Forced.legacy`, `testdata/end8Unforced.padded` | The original site downloads, kept as fixtures for the legacy 9-byte and capacity-padded 8-byte reader paths |
-| `tools/convert-tablebase.js` | Converts any supported tablebase format to v3 (verifies entry-for-entry before writing) |
+| `testdata/end8Forced.v3`, `testdata/end8Unforced.v3` | The original ≤3-piece values converted to v3, kept as the shipped-data oracle for generator/regression tests |
+| `tools/convert-tablebase.js` | Converts any supported hash-keyed tablebase format to v3 (verifies entry-for-entry before writing) |
+| `tools/generate-tablebase.js` | Retrograde tablebase generator; writes v4 (or `--v3`) for any piece count |
+| `tools/verify-generator.js` | Proves the generator reproduces every originally shipped value (run once per mode; see BUGS.md #12) |
 
-Tablebase v3 format: 16-byte header (`CHFT` magic, u32 version, u32 entryCount,
-u32 flags with bit 0 = forced-jumps mode) followed by exact-sized arrays
+Tablebase v3 format ("CHFT", hash-keyed): 16-byte header (`CHFT` magic,
+u32 version, u32 entryCount, u32 flags with bit 0 = forced-jumps mode)
+followed by exact-sized arrays
 `u32 h0[n] | u16 (h1>>>16)[n] | u8 (h1&0xFF)[n] | u8 resultAndDist[n]`.
 It combines the legacy format's exact sizing with the newer format's leaner
 8-byte entries, and the header makes detection unambiguous, catches truncation,
 and lets the UI refuse a tablebase generated for the wrong rules mode.
-`ResultList2` reads all three formats.
+`ResultList2` reads all three hash-keyed formats.
+
+Tablebase v4 format ("CHFI", dense-indexed): 16-byte header (`CHFI` magic
+`0x49464843`, u8 version = 1, u8 flags with bit 0 = forced-jumps mode,
+u8 maxPieces) followed by exactly one byte per base position, addressed by
+a perfect rank (no hashes, no per-entry keys, no binary search):
+
+    rank = sectionOffset(k) + (comboRank · 4^k + digitsRank) · 2 + turnBit
+
+where `k` is the piece count (2..maxPieces), `comboRank` is the combinadic
+rank of the occupied dark-square set, `digitsRank` packs each piece as
+`(RED?2:0)+(KING?1:0)` in square order, and `turnBit` is the side to move.
+Byte encoding: `255` = position absent/unreachable, `64` = explicit draw,
+otherwise `((v+1)<<6) | min(d,63)` for value `v` in {-1,+1} and distance
+`d`. Mid-jump states are not stored (the search recurses through
+continuations until the jump ends); elimination terminals are answered by
+the search's no-moves path. One byte per slot makes the ≤4-piece table
+19.1 MB/mode versus ~98 MB for the same 12.8M labeled positions at 8 bytes
+each in v3, and probing is O(1). `openTablebase`
+sniffs the magic and returns a `TablebaseV4` (`probe(game)`) for CHFI
+files or a `ResultList2` (`getEntry(hash)`) otherwise; the search accepts
+either.
 
 Added in this repo:
 
@@ -310,6 +335,46 @@ vs the unconditional version (`snapshots/after-homerow`) it scored 50.6% /
 50.6% over 400 games/mode at depth 4 and 53.0% / 51.0% over 100/mode at
 depth 5 — positive in all four cells (50.9% ± 2.9 pooled), with the effect
 naturally concentrated in the rare kings-only endgames where it fires.
+
+## Tablebase generation (the shipped tables are now ≤4 pieces)
+
+The original site tablebases covered only **≤3 pieces** (proven by
+enumeration accounting plus 575,360 3-kings-vs-1 probes: zero hits) and
+misclassified deep decisive states as draws (BUGS.md #12).
+`tools/generate-tablebase.js` rebuilds them from scratch by layered
+retrograde analysis, using the engine itself for move generation (a shared
+`Game` via a constructor backdoor, dense `tablebaseRank` ids, flat edge
+arrays, and a compacting worklist):
+
+```sh
+node tools/generate-tablebase.js 4 forced end8Forced
+node tools/generate-tablebase.js 4 unforced end8Unforced
+```
+
+Proof of correctness before scaling: the generator reproduces the
+originally shipped data **exactly** — 100.00% presence and zero value
+mismatches across all 500,334 shipped entries in both modes
+(`tools/verify-generator.js`; the only discrepancy classes are the
+originals' own gaps: elimination terminals, non-canonical inflated
+distances, and the ~141k deep wins dropped by their draw-threshold-bounded
+generation). The 2-piece slice of that proof runs in the test suite on
+every `npm test`.
+
+The shipped ≤4-piece tables: 15.3M enumerated states per mode, 12,817,672
+labeled base positions each (forced: 9,360,134 decisive + 3,457,538 draws;
+unforced: 9,309,216 + 3,508,456), solved in ~2.5-3 minutes per mode (110
+retrograde rounds over 52-61M edges), written as 19,062,288-byte v4 files.
+Draws are exact (clockless semantics: unlabeled after the fixpoint =
+provably drawn), distances are canonical, and the deep wins the originals
+called draws are now decisive.
+
+Arena validation (depth 4, 400 games/mode, shared seeded openings, the
+only difference being which tablebase each side probes): the v4 ≤4-piece
+tables score **54.8% forced** (169-131-100) vs the v3-era ≤3-piece tables
+— decisive games split 169-131, significant — and are flat in unforced
+mode (48.9%, 135-144-121), the same asymmetry every prior tablebase
+experiment showed: unforced games reach the covered region far less
+often. No alarms, no divergences: an upgrade with no regression.
 
 ## Test coverage summary
 

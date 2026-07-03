@@ -478,13 +478,16 @@ test('Search auto-loads the canonical tablebase under Node (on by default)',
             "with tablebase explicitly off, a depth-4 search cannot prove a d>=13 win, got " + off.value);
     });
 
-test('generator reproduces shipped values for the 2-piece space (fast slice of the full proof)', function () {
+test('generator reproduces shipped values for the 2-piece space (fast slice of the full proof)',
+    { skip: !fs.existsSync(v3ForcedPath) && 'v3 fixture not present' },
+    function () {
     // The full <=3-piece verification (tools/verify-generator.js) shows
     // 100% presence and ZERO value mismatches across all 500,334 shipped
     // entries in both modes; this test keeps a fast slice of that proof in
-    // the suite.
+    // the suite. The originally shipped values live on as the v3 fixture
+    // now that the canonical files are regenerated v4 tables.
     var gen = require('../tools/generate-tablebase.js');
-    var tb = new checkers.ResultList2(loadBuffer(forcedPath));
+    var tb = new checkers.ResultList2(loadBuffer(v3ForcedPath));
     var solved = gen.solve(2, true, function () {});
     var present = 0, valueMismatch = 0;
     solved.entries.forEach(function (e) {
