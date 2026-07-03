@@ -183,15 +183,15 @@ since it buys exactly the refutation one ply past the horizon. (Earlier
 ×2.4/×4.3 full-quiescence cost figures were JIT-warmup-inflated; warmed
 costs are ×2.2/×3.7.)
 
-The UI sets `quiesceDepth = level − 1` (levels remain pure depth). Level 1
-is exactly the original beginner engine (d1, no capture extension — the
-punching bag), and the budget grows with depth, approaching full quiescence
-where it is strongest and cheapest. Measured ladder (forced/unforced,
-200 games/mode): L1→L2 **+1040/∞** (the intentional beginner cliff:
-200-0-0), L2→L3 +301/+266, L3→L4 +184/+153, L4→L5 +125/+109 — big
-rewarding jumps early, finer gradations at higher levels. (A flat
-`quiesceDepth = 1` ladder was also measured — uniform ~+150-255 per level
-but no beginner rung — and set aside in favor of this design.)
+The UI plays the engine default `quiesceDepth = 1` at every level (levels
+remain pure depth; the UI sets nothing). Measured ladder (forced/unforced,
+200 games/mode): L1→L2 +255/+207, L2→L3 +207/+225, L3→L4 +238/+151 —
+near-uniform steps with no beginner cliff. The entry level plays "greedy
+but not suicidal" (it beat the original piece-hanging L1 200-0-0); the old
+punching bag was deliberately not retained. Two alternatives were measured
+and set aside: `qd = level − 1` (restores the punching bag but steepens the
+early ladder: +1040/∞, +301/+266, …) and a hand-built level table (messy to
+describe).
 
 Quiescence-vs-depth crossover: in Elo per doubling of think time, forced
 mode favors quiescence from depth 4 on (175 vs 140, then 151 vs 146; by

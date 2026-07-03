@@ -287,10 +287,8 @@ CHF.checkers.ui = function() {
         }
         value = Math.max(1, value);
         player.maxDepth = value;
-        // Level 1 is the beginner punching bag (no capture extension);
-        // higher levels grow the budget alongside depth, approaching full
-        // quiescence where it is strongest and cheapest.
-        player.quiesceDepth = value - 1;
+        // Levels are pure depth; the engine's default quiesceDepth = 1
+        // applies at every level, giving a near-uniform ladder (see README).
         level.innerHTML = "Level: " + value;
         try {
             localStorage.setItem("level", value);
