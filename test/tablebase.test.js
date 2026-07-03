@@ -617,3 +617,22 @@ test('canonical v4 tables cover 4 pieces and agree with the v3-era data on <=3',
         assert.ok(compared > 100, "sampled " + compared + " overlapping states");
         assert.strictEqual(disagreements, 0, "values must agree with the validated v3 data");
     });
+
+test('K vs K theory: single-corner defender loses, double-corner defender draws', function () {
+    // The classic endgame facts, provable from the shipped table — and the
+    // foundation of the UI's "Draw with best play" indication (it shows
+    // exactly when probe().v === 0, vanishes outside coverage or when the
+    // position turns decisive).
+    if (!fs.existsSync(forcedPath)) return;
+    var tb = checkers.openTablebase(loadBuffer(forcedPath));
+    if (!tb.probe) return;
+    var helpers = require('./helpers.js');
+    checkers.setForcedJumps(true);
+    // Defender on the single-corner square (7,0)=64: lost with the mover
+    // holding the opposition.
+    var cornered = helpers.makeGame({ turn: 'black', pieces: { 2: 'B', 64: 'R' } });
+    assert.deepStrictEqual(tb.probe(cornered), { v: 1, d: 11 });
+    // Defender in the double-corner pocket (7,6)=70: a theoretical draw.
+    var safe = helpers.makeGame({ turn: 'black', pieces: { 2: 'B', 70: 'R' } });
+    assert.deepStrictEqual(tb.probe(safe), { v: 0, d: 0 });
+});

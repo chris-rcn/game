@@ -297,6 +297,21 @@ CHF.checkers.ui = function() {
         } catch (e) {
         }
     }
+    // A provable draw indication: the tablebase's explicit draws are
+    // theoretical facts (drawn under best play by both sides), so the
+    // message can only appear inside coverage and vanishes on its own if
+    // a blunder makes the position decisive again — or the position grows
+    // beyond what the tablebase knows. Play is never terminated by it.
+    function drawIndication() {
+        var tb = tablebases[checkers.getForcedJumps()];
+        if (tb && tb.probe) {
+            var entry = tb.probe(game); // null when mid-jump or uncovered
+            if (entry && entry.v === 0) {
+                return "Draw with best play";
+            }
+        }
+        return "";
+    }
     function instructHuman() {
         var moves = game.getMoves();
         if (moves.length === 0) {
@@ -312,12 +327,10 @@ CHF.checkers.ui = function() {
             }
             setSelectedLocation(game.getJumpContinuationLoc());
             drawBoard(game);
-        } else if (game.hasAnyJump()) {
-            if (checkers.getForcedJumps()) {
-                setMessage("Make the jump!");
-            }
+        } else if (game.hasAnyJump() && checkers.getForcedJumps()) {
+            setMessage("Make the jump!"); // jump instruction takes precedence
         } else {
-            setMessage("");
+            setMessage(drawIndication());
         }
     }
     function makeMove(move) {
