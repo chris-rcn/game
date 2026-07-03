@@ -129,6 +129,11 @@ CHF.checkers.players = function() {
         // 0.2 confirmed at 52.5%/53.3% ± 4.9 over 800 games at depth 4,
         // with kingValue=1.4 re-verified as stable alongside it.
         pub.runawayValue = 0.2;
+        // When this many or fewer pieces remain, the search gets ONE bonus
+        // ply, spending the endgame's cheap nodes where depth converts best
+        // (reaching toward tablebase coverage past the quiet-maneuvering
+        // horizon). 0 = off. Decided at the root, once per move.
+        pub.endgameBonusPieces = 0;
         // Rejected candidates (rankValue, supportValue, homeRowFullSupport,
         // runawayGraded) were removed after arena testing; README.md keeps
         // the measurements.
@@ -376,6 +381,11 @@ CHF.checkers.players = function() {
         function genMoveDetail(game) {
             // returns { move, value, distanceFromRoot }
             assert(pub.maxDepth > 0);
+            // Endgame bonus ply: decided once per move at the root (piece
+            // count only ever falls, so the threshold is crossed once per
+            // game and the TT's remaining-depth keying is untouched).
+            var targetDepth = pub.maxDepth +
+                (pub.endgameBonusPieces && game.getCheckerCount() <= pub.endgameBonusPieces ? 1 : 0);
             // Resolve per call so a mode change picks up the right table.
             activeTablebase = pub.tablebase !== undefined ? pub.tablebase :
                 (common.isNodeJs() ? loadNodeTablebase(checkers.getForcedJumps()) : null);
@@ -403,7 +413,7 @@ CHF.checkers.players = function() {
                     // .forced flag) live on result.move.
                     var result = negamax(game, 0, -1e9, 1e9, killer);
                     if (result.move && !result.move.forced) {
-                        if (common.elapsedSec(startMs) > limitSec || currentMaxDepth >= pub.maxDepth) {
+                        if (common.elapsedSec(startMs) > limitSec || currentMaxDepth >= targetDepth) {
                             pub.typicalDepth.add(currentMaxDepth);
                             return result;
                         }
@@ -418,7 +428,7 @@ CHF.checkers.players = function() {
                 }
             }
             transpositionTable = {};
-            currentMaxDepth = pub.maxDepth;
+            currentMaxDepth = targetDepth;
             pub.typicalDepth.add(currentMaxDepth);
             return negamax(game, 0, -1e9, 1e9);
         }
