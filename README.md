@@ -422,6 +422,26 @@ the search finds tactically (advancement → kinging) add bias without
 information. Both parameters were **removed from the code** after a final
 review; these measurements are their record.
 
+### Rejected decisively: explicit mobility (`mobilityValue`, removed)
+
+The dither adoption suggested pricing mobility explicitly (the Beal
+effect is implicit mobility). A mover-relative per-legal-move bonus —
+free to compute, since the move list already exists at every eval
+site — was scanned vs 0 (depth 4, 120/mode, forced/unforced) and
+produced the cleanest downward dose-response of any experiment:
+0.002 → 50.4%/52.1%, 0.005 → **37.1%/36.7%**, 0.01 → **19.2%/31.3%**.
+Rejected without confirmation and removed.
+
+The autopsy is instructive: symmetric zero-mean dither harvests the
+mobility signal *statistically* without biasing any comparison, but an
+explicit mover-relative term is a systematic bias whose sign depends
+on whose turn the leaf lands on — and with quiescence extending some
+lines and not others, sibling lines are compared at different leaf
+parities, so the term injects parity noise instead of information.
+Forced-jump positions also invert it (a winning capture position
+reports one legal move). Mobility in this engine is best left to the
+dither, which collects the benefit without the bias.
+
 ### Adopted: back-row pawn bonus (`Search.homeRowValue = 0.1`)
 
 The mirror image of the rejected advancement bonus — a pawn still guarding
