@@ -428,3 +428,46 @@ test('search prefers the shorter tablebase win (distance-decay gradient)', funct
             "must follow the d=" + Math.min(c.dA, c.dB) + " win");
     });
 });
+
+test('Search auto-loads the canonical tablebase under Node (on by default)',
+    { skip: !fs.existsSync(unforcedPath) && 'end8Unforced not present' },
+    function () {
+        var common = require('../common.js');
+        var players = require('../players.js');
+        var tb = new checkers.ResultList2(loadBuffer(unforcedPath));
+        checkers.setForcedJumps(false);
+        // Find a covered win DEEP enough that a raw depth-4 search cannot
+        // prove it — only a tablebase makes the value near-certain.
+        var rand = new common.Random(7);
+        var found = null;
+        for (var g0 = 0; g0 < 400 && !found; g0++) {
+            var game = new checkers.Game();
+            for (var step = 0; step < 400; step++) {
+                var mv = game.getMoves();
+                if (mv.length === 0) break;
+                game.makeMove(mv[rand.int(mv.length)], true);
+                if (game.getCheckerCount() <= 3 && game.getMoves().length > 0 &&
+                        !game.getJumpContinuationLoc()) {
+                    var entry = tb.getEntry(game.hashBase(), game.getCheckerCount());
+                    if (entry && entry.v === 1 && entry.d >= 13) {
+                        found = JSON.parse(JSON.stringify(game.getState()));
+                        break;
+                    }
+                }
+            }
+        }
+        assert.ok(found, "expected to find a deep tablebase win");
+        function search(configure) {
+            var s = new players.Search(4);
+            s.evalDither = 0;
+            configure(s);
+            return s.genMoveDetail(new checkers.Game(JSON.parse(JSON.stringify(found))));
+        }
+        var auto = search(function () { /* untouched: auto */ });
+        var off = search(function (s) { s.tablebase = null; });
+        checkers.setForcedJumps(true);
+        assert.ok(auto.value > 0.9,
+            "auto-loaded tablebase should prove the win, got " + auto.value);
+        assert.ok(off.value < 0.9,
+            "with tablebase explicitly off, a depth-4 search cannot prove a d>=13 win, got " + off.value);
+    });

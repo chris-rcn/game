@@ -122,9 +122,16 @@ How it stays fair and meaningful:
 Run `node arena.js --help 2>/dev/null || head -50 arena.js` for the full flag
 list (documented in the header comment).
 
-### Endgame tablebases in the arena
+### Endgame tablebases: on by default
 
-Arena search players load the mode-matching endgame tablebase by default
+`Search.tablebase` semantics: `undefined` (the default) means **auto** — under
+Node the engine lazily loads the mode-matching canonical file itself; in the
+browser it stays empty until the UI's async fetch injects one. `null` means
+explicitly off; an object is used as given. Tablebases are on unless they need
+to be off — the original null default was an artifact of the browser's async
+loading that silently became "off unless every consumer remembered."
+
+Arena search players share one mode-matching tablebase instance by default
 (`--no-tablebase` to disable) — earlier experiments played endgames blind,
 which is now fixed. Alongside this, tablebase hits in the search are decayed
 by their distance-to-result (`v × 0.99999^d`): without that gradient every

@@ -140,9 +140,10 @@ function makePlayer(spec, tablebase) {
         inner = new engine.players.Random(spec.seed || 1);
     } else {
         inner = new engine.players.Search(spec.depth, spec.maxSeconds);
-        if (tablebase) {
-            inner.tablebase = tablebase;
-        }
+        // Always explicit: the shared instance when on, null when off —
+        // never the engine's Node auto-load, which would defeat
+        // --no-tablebase and double-load the files.
+        inner.tablebase = tablebase || null;
         var optKeys = Object.keys(spec.searchOptions || {});
         optKeys.forEach(function (key) {
             if (!(key in inner)) {

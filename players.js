@@ -18,6 +18,27 @@ CHF.checkers.players = function() {
 
     var isJumpMove = checkers.isJump;
 
+    // Canonical endgame tablebases, auto-loaded per mode under Node (the
+    // browser cannot load synchronously; checkersUi injects after its async
+    // fetch). Lazy, cached, and silent when the files are absent.
+    var nodeTablebases = {};
+    function loadNodeTablebase(forced) {
+        var key = forced ? 'forced' : 'unforced';
+        if (!(key in nodeTablebases)) {
+            nodeTablebases[key] = null;
+            try {
+                var fs = require('fs');
+                var path = require('path');
+                var raw = fs.readFileSync(path.join(__dirname, forced ? 'end8Forced' : 'end8Unforced'));
+                nodeTablebases[key] = new checkers.ResultList2(
+                    raw.buffer.slice(raw.byteOffset, raw.byteOffset + raw.byteLength));
+            } catch (e) {
+                // stay null: engine plays without a tablebase
+            }
+        }
+        return nodeTablebases[key];
+    }
+
     function Random(seed) {
         var pub = this;
         var skipChecks = true;
@@ -71,7 +92,11 @@ CHF.checkers.players = function() {
         var valueDecay = 0.99999;
         pub.logDepth = -1;
         pub.maxDepth = initialMaxDepth;
-        pub.tablebase = null;
+        // undefined = auto (Node: load the mode-matching canonical file;
+        // browser: none until injected). null = explicitly off. An object is
+        // used as given. Tablebases are on unless they need to be off.
+        pub.tablebase = undefined;
+        var activeTablebase;
         // Pawns are worth 1. Learned by arena self-play (both modes, depths
         // 4 and 6, ~2200 games): every candidate below the original 2.0 beat
         // it and every candidate above lost; 1.4 — the checkers-literature
@@ -141,8 +166,8 @@ CHF.checkers.players = function() {
                 }
             }
 
-            if (pub.tablebase && depth > 0) {
-                var tbEntry = pub.tablebase.getEntry(hash);
+            if (activeTablebase && depth > 0) {
+                var tbEntry = activeTablebase.getEntry(hash);
                 if (tbEntry) {
                     // Decay by distance-to-result so tablebase hits carry a
                     // conversion gradient in the search's own tie-break
@@ -275,6 +300,9 @@ CHF.checkers.players = function() {
         function genMoveDetail(game) {
             // returns { move, value, distanceFromRoot }
             assert(pub.maxDepth > 0);
+            // Resolve per call so a mode change picks up the right table.
+            activeTablebase = pub.tablebase !== undefined ? pub.tablebase :
+                (common.isNodeJs() ? loadNodeTablebase(checkers.getForcedJumps()) : null);
             if (pub.useIterativeDeepening || maxSeconds > 0) {
                 var limitSec = maxSeconds > 0 ? 0.4 * maxSeconds : Infinity;
                 var killer = null;

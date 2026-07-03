@@ -13,6 +13,7 @@ function newSearch(depth, opts) {
     opts = opts || {};
     var s = new players.Search(depth, opts.maxSeconds);
     s.evalDither = 0; // deterministic
+    s.tablebase = null; // these tests pin raw search; auto-load has its own tests
     if (opts.tt) s.useTranspositionTable = true;
     if (opts.ab === false) s.doAlphaBeta = false;
     if (opts.id) s.useIterativeDeepening = true;
@@ -38,6 +39,9 @@ test('Search defaults to the learned king value of 1.4', function () {
     // totals the support term LOST (45.8/44.6% vs plain homeRow 0.15).
     assert.strictEqual(s.supportValue, 0);
     assert.strictEqual(s.homeRowFullSupport, false);
+    // Tablebase defaults to auto (undefined): on wherever a table can be
+    // resolved, off only when explicitly set to null.
+    assert.strictEqual(s.tablebase, undefined);
 });
 
 test('Random player: genMove returns a legal move, deterministically per seed', function () {
