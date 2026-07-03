@@ -46,6 +46,27 @@ test('Search defaults to the learned king value of 1.4', function () {
     // value-neutral at fixed depth (49.2% vs plain over 60 games) and
     // ~17% faster with even one side using it.
     assert.strictEqual(s.useTranspositionTable, true);
+    // doQuiesce was converted to a graded extension budget: 0 ≡ old false,
+    // Infinity ≡ old true, intermediate values are new difficulty rungs.
+    assert.strictEqual(s.quiesceDepth, Infinity);
+    assert.strictEqual(s.doQuiesce, undefined);
+});
+
+test('quiesceDepth grades the capture extension budget', function () {
+    // Same poisoned-capture setup as the BUG #11 test, unforced at depth 1:
+    // the recapture sits one ply past the horizon, so budget 0 walks into it
+    // and budget 1 already sees the refutation.
+    checkers.setForcedJumps(false);
+    function pick(quiesceDepth) {
+        var g = h.makeGame({ turn: 'black', pieces: { 48: 'b', 38: 'r', 40: 'r', 42: 'R' } });
+        var s = newSearch(1);
+        s.quiesceDepth = quiesceDepth;
+        var m = s.genMoveDetail(g).move;
+        return m.from + '>' + m.to;
+    }
+    assert.strictEqual(pick(0), '48>32', "no budget: horizon-blind, grabs the poisoned piece");
+    assert.strictEqual(pick(1), '48>28', "one ply of budget reveals the recapture");
+    assert.strictEqual(pick(Infinity), '48>28');
 });
 
 test('Random player: genMove returns a legal move, deterministically per seed', function () {

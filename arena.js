@@ -39,7 +39,7 @@
 //   node arena.js --forced on --verbose
 //   node arena.js --opts useTranspositionTable=true       # exercise TT path
 //   node arena.js --opts useIterativeDeepening=true       # exercise ID+killer
-//   node arena.js --opts-a doQuiesce=false                # asymmetric feature
+//   node arena.js --opts-a quiesceDepth=0                 # asymmetric feature
 //
 // Options (defaults in brackets):
 //   --games N            games per forced mode, rounded up to even [100]
@@ -51,7 +51,7 @@
 //   --random-a/-b        use the random player instead of search
 //   --opts K=V,K=V       Search feature flags applied to BOTH sides; any
 //                        public Search field works: useTranspositionTable,
-//                        useIterativeDeepening, useKillerMove, doQuiesce,
+//                        useIterativeDeepening, useKillerMove, quiesceDepth,
 //                        doAlphaBeta, evalDither, ... (values are coerced:
 //                        true/false/numbers)
 //   --opts-a/-b K=V,...  per-side feature flags (merged over --opts)

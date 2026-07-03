@@ -115,7 +115,12 @@ CHF.checkers.players = function() {
                 pub.supportValue, pub.homeRowFullSupport);
         };
         pub.evalDither = 0.001;
-        pub.doQuiesce = true;
+        // Extension budget beyond maxDepth while a capture is pending (or
+        // the move is forced): 0 = none (evaluate at the bare horizon),
+        // Infinity = extend until quiet.  Generalizes the old doQuiesce
+        // boolean (false ≡ 0, true ≡ Infinity) so intermediate strengths
+        // exist between "horizon-blind" and "full quiescence".
+        pub.quiesceDepth = Infinity;
         pub.doAlphaBeta = true;
         pub.evalCounter = 0;
         // On by default since the depth-comparison fix (BUGS.md #4):
@@ -197,7 +202,8 @@ CHF.checkers.players = function() {
                 // available; the last move is a slide in unforced mode even
                 // when captures are pending.
                 var firstIsJump = isJumpMove(moves[0]);
-                var canContinue = pub.doQuiesce && (moves.length === 1 || firstIsJump);
+                var canContinue = depth - currentMaxDepth < pub.quiesceDepth &&
+                    (moves.length === 1 || firstIsJump);
                 if (!canContinue) {
                     pub.evalCounter++;
                     var evaluation = pub.evalFunction(game, depth, moves);

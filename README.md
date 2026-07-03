@@ -82,7 +82,7 @@ Any public `Search` field can be set per side (or both) from the CLI:
 ```sh
 node arena.js --opts useTranspositionTable=true       # arena-test the TT fix (#4)
 node arena.js --opts useIterativeDeepening=true       # exercise ID + killer move (#5)
-node arena.js --opts-a doQuiesce=false                # asymmetric feature comparison
+node arena.js --opts-a quiesceDepth=0                 # asymmetric feature comparison
 node arena.js --max-seconds 0.05                      # time-budgeted search (nondeterministic;
                                                       #   the symmetry alarm is skipped)
 ```
@@ -165,6 +165,19 @@ forced mode quiescence delivers more strength than a ply at the same price;
 in unforced mode raw depth is marginally more time-efficient but quiescence
 still wins at equal depth. Note: the shipped UI runs `doQuiesce = false` —
 a difficulty decision worth revisiting, since it forfeits ~200 Elo.
+
+`doQuiesce` was converted to a graded budget, `Search.quiesceDepth`: the
+number of plies past the horizon the search may extend while a capture is
+pending (or the move is forced). 0 ≡ the old `false`, Infinity (the default)
+≡ the old `true`, and intermediate values are new strength rungs. Measured
+ladder at depth 4 (forced/unforced, warmed best-of-3 costs): qd0→qd1
+**+172/+117 Elo** for ×1.67/×1.88 time; qd1→qd2 +76/+19 for ×1.20/×1.27;
+qd2→∞ +60/+14 for ×1.11/×1.56. The first budget ply delivers +232/+129 Elo
+per time-doubling — better than a full ply (+140/+93) in **both** modes,
+since it buys exactly the refutation one ply past the horizon. (Earlier
+×2.4/×4.3 full-quiescence cost figures were JIT-warmup-inflated; warmed
+costs are ×2.2/×3.7.) The UI keeps its handicap as `quiesceDepth = 0` and
+can now build level rungs from (depth, quiesceDepth) pairs.
 
 Quiescence-vs-depth crossover: in Elo per doubling of think time, forced
 mode favors quiescence from depth 4 on (175 vs 140, then 151 vs 146; by
