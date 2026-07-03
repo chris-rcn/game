@@ -27,10 +27,6 @@ CHF.checkers.ui = function() {
     var animationVelocity = 1 / animationFrames;
     var randPlayer = new players.Random();
     var player = new players.Search(1);
-    // Levels are pure search depth; one ply of capture-extension budget at
-    // every level keeps the engine from hanging pieces and makes the level
-    // ladder nearly uniform (~+150-250 Elo per level; see README).
-    player.quiesceDepth = 1;
     var ignoreButtons = false;
     var computerPlaysRed = true;
     var computerPlaysBlack = false;
@@ -291,6 +287,10 @@ CHF.checkers.ui = function() {
         }
         value = Math.max(1, value);
         player.maxDepth = value;
+        // Level 1 is the beginner punching bag (no capture extension);
+        // higher levels grow the budget alongside depth, approaching full
+        // quiescence where it is strongest and cheapest.
+        player.quiesceDepth = value - 1;
         level.innerHTML = "Level: " + value;
         try {
             localStorage.setItem("level", value);
