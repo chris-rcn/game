@@ -166,6 +166,15 @@ in unforced mode raw depth is marginally more time-efficient but quiescence
 still wins at equal depth. Note: the shipped UI runs `doQuiesce = false` —
 a difficulty decision worth revisiting, since it forfeits ~200 Elo.
 
+Quiescence-vs-depth crossover: in Elo per doubling of think time, forced
+mode favors quiescence from depth 4 on (175 vs 140, then 151 vs 146; by
+depth 6 its cost multiple ×1.65 vs a ply's ×2.6 decides it outright), while
+unforced mode favors raw depth at 4-5 (78 vs 93, 83 vs 114) and flips at
+depth 6 (66 vs 56) as the ply's value collapses (+147 → +87) faster than
+quiescence's (+147 → +111) and their cost curves cross. **From depth ~6,
+quiescence is the better use of time in both modes** (crossover ±1 ply given
+error bars; every underlying trend is monotone).
+
 The value of a ply diminishes steeply (no quiescence, 400 games/mode,
 forced/unforced): d1→d2 **+920/+1040 Elo** (saturated — a floor; depth 1
 cannot see the opponent's reply and hangs material constantly), d2→d3
