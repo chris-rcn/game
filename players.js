@@ -153,6 +153,18 @@ CHF.checkers.players = function() {
         pub.typicalDepth = new common.IirFilter(1);
         pub.useIterativeDeepening = false;
         pub.useKillerMove = true;
+        // Node-budgeted search: when > 0, genMove runs iterative deepening
+        // and keeps deepening while the TOTAL nodes spent on this move stay
+        // affordable — it never starts an iteration it predicts will bust
+        // the budget (estimated from the observed per-iteration growth),
+        // and it always completes depth 1. Budgets meter thinking EFFORT:
+        // device-independent, deterministic, and self-allocating (sparse
+        // endgames search deeper than crowded midgames for the same spend).
+        // maxDepth remains a hard cap on top. pub.lastNodeCount reports the
+        // spend of the most recent genMove for calibration and tests.
+        pub.nodeLimit = 0;
+        pub.lastNodeCount = 0;
+        var nodeCount = 0;
         // The game has no repetition rule (draws are positional facts), but
         // returning to a position already seen in the actual game line has
         // provably achieved nothing: any win available now was available at
@@ -187,6 +199,7 @@ CHF.checkers.players = function() {
         function negamax(game, depth, alpha, beta, killer) {
             // returns { move, value, distanceFromRoot }
 
+            nodeCount++;
             var alphaOrig = alpha;
             var result = {};
             var hash = game.hashBase();
@@ -393,26 +406,43 @@ CHF.checkers.players = function() {
                 lineHistory[rootHash.h0 + "," + rootHash.h1] = true;
                 linePath = [];
             }
-            if (pub.useIterativeDeepening || maxSeconds > 0) {
+            nodeCount = 0;
+            if (pub.useIterativeDeepening || maxSeconds > 0 || pub.nodeLimit > 0) {
                 var limitSec = maxSeconds > 0 ? 0.4 * maxSeconds : Infinity;
                 var killer = null;
                 var startMs = common.nowMs();
+                var prevIterNodes = 0;
                 for (currentMaxDepth=1; ; currentMaxDepth+=1) {
                     transpositionTable = {};
+                    var iterStartNodes = nodeCount;
                     // negamax returns the result wrapper; the Move (and its
                     // .forced flag) live on result.move.
                     var result = negamax(game, 0, -1e9, 1e9, killer);
+                    var iterNodes = nodeCount - iterStartNodes;
                     if (result.move && !result.move.forced) {
-                        if (common.elapsedSec(startMs) > limitSec || currentMaxDepth >= pub.maxDepth) {
+                        var budgetExhausted = false;
+                        if (pub.nodeLimit > 0) {
+                            // Predict the next iteration from the observed
+                            // growth ratio (default 3 before one exists,
+                            // clamped to [2, 8] against quiescence noise).
+                            var growth = prevIterNodes > 0 ?
+                                Math.min(8, Math.max(2, iterNodes / prevIterNodes)) : 3;
+                            budgetExhausted = nodeCount + iterNodes * growth > pub.nodeLimit;
+                        }
+                        if (budgetExhausted || common.elapsedSec(startMs) > limitSec ||
+                                currentMaxDepth >= pub.maxDepth) {
                             pub.typicalDepth.add(currentMaxDepth);
+                            pub.lastNodeCount = nodeCount;
                             return result;
                         }
+                        prevIterNodes = iterNodes;
                         if (pub.useKillerMove) {
                             killer = result.move;
                         }
                     } else {
                         // Forced move or game over: deepening cannot change
                         // the answer.
+                        pub.lastNodeCount = nodeCount;
                         return result;
                     }
                 }
@@ -420,7 +450,9 @@ CHF.checkers.players = function() {
             transpositionTable = {};
             currentMaxDepth = pub.maxDepth;
             pub.typicalDepth.add(currentMaxDepth);
-            return negamax(game, 0, -1e9, 1e9);
+            var fixedResult = negamax(game, 0, -1e9, 1e9);
+            pub.lastNodeCount = nodeCount;
+            return fixedResult;
         }
         pub.genMoveDetail = genMoveDetail;
     }

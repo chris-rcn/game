@@ -395,3 +395,70 @@ test('repetitionDraws off is bit-identical to the previous search', function () 
         { from: a.move.from, to: a.move.to, value: a.value },
         { from: b.move.from, to: b.move.to, value: b.value });
 });
+
+// ---- node-budgeted search (Search.nodeLimit) ----
+
+test('nodeLimit is gated off by default and the fixed-depth path still reports node spend', function () {
+    var s = new players.Search(3);
+    assert.strictEqual(s.nodeLimit, 0);
+    var g = new checkers.Game();
+    var sFixed = newSearch(3);
+    sFixed.genMove(g.copy());
+    assert.ok(sFixed.lastNodeCount > 0, "fixed-depth search counts nodes too");
+});
+
+test('nodeLimit meters thinking effort: bigger budgets deepen, budgets are respected', function () {
+    // From the opening (branching ~7-9), depth 1 costs a handful of nodes
+    // and each iteration multiplies. maxDepth acts as a hard cap above.
+    function run(limit) {
+        var s = newSearch(20);
+        s.nodeLimit = limit;
+        var g = new checkers.Game();
+        var move = s.genMove(g);
+        assert.ok(move && g.makeMove(move), "must always return a legal move");
+        return { depth: s.typicalDepth.value(), nodes: s.lastNodeCount };
+    }
+    var tiny = run(1);       // affords nothing beyond the guaranteed depth 1
+    var small = run(300);
+    var big = run(30000);
+    assert.strictEqual(tiny.depth, 1, "depth 1 always completes");
+    assert.ok(small.depth > tiny.depth, "more budget, more depth");
+    assert.ok(big.depth > small.depth, "more budget, more depth (again)");
+    // The predictive stop keeps realized spend at or near the budget; the
+    // only overshoot source is a mispredicted final iteration.
+    assert.ok(small.nodes <= 300 * 3, "spend near budget, got " + small.nodes);
+    assert.ok(big.nodes <= 30000 * 3, "spend near budget, got " + big.nodes);
+});
+
+test('nodeLimit self-allocates: tablebase-covered endgames ride to the depth cap on pennies', function () {
+    // The self-allocation property, stated honestly: depth goes where
+    // nodes are CHEAP. That is not "all endgames" — a quiet 4-king
+    // 6-piece position has HIGHER branching than the 7-move opening
+    // (kings move both ways) and prices depth accordingly. It is the
+    // tablebase-covered region, where probes answer whole subtrees:
+    // there the same budget reaches the maxDepth cap almost for free.
+    function run(game, limit) {
+        var s = new players.Search(12);
+        s.evalDither = 0;
+        s.nodeLimit = limit; // defaults otherwise: TT, tablebase, repetition
+        s.genMove(game.copy());
+        return { depth: s.typicalDepth.value(), nodes: s.lastNodeCount };
+    }
+    var opening = run(new checkers.Game(), 5000);
+    var covered = run(h.makeGame({ turn: 'black',
+        pieces: { 40: 'B', 42: 'B', 2: 'R' } }), 5000);
+    assert.ok(opening.depth < 12, "opening cannot afford the cap: depth " + opening.depth);
+    assert.strictEqual(covered.depth, 12, "covered endgame reaches the cap");
+    assert.ok(covered.nodes < opening.nodes / 4,
+        "and spends a fraction of the budget: " + covered.nodes + " vs " + opening.nodes);
+});
+
+test('node-budgeted moves are deterministic for a given budget', function () {
+    function move(limit) {
+        var s = newSearch(20);
+        s.nodeLimit = limit;
+        var m = s.genMove(new checkers.Game());
+        return m.from + '>' + m.to;
+    }
+    assert.strictEqual(move(2000), move(2000));
+});
