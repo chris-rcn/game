@@ -466,6 +466,10 @@ one-winning-capture positions the slide count punished. Scan vs 0
 to out-shout material, the parity bias takes over). Confirmation of
 0.03 at 400 games/mode: **57.3% / 57.3% ± 4.8** (+51 Elo in both
 modes) — the strongest confirmed eval term since the back-row bonus.
+Sanity-checked under the node-budget protocol player after the
+protocol switch (`nodeLimit=2000`, 120/mode): 54.6% / 52.1% ± 8.9 —
+still positive in both modes; the smaller reading is expected, since
+budgeted deepening resolves some of the very leaves the term prices.
 Reproduce with:
 
 ```sh
