@@ -490,6 +490,7 @@ test('generator reproduces shipped values for the 2-piece space (fast slice of t
     assert.strictEqual(valueMismatch, 0, "solver and shipped table must agree on every value");
     assert.ok(present >= 2770, "2-piece space should overlap substantially, got " + present);
     // Elimination terminals (side to move has no pieces) are stored: v=-1 d=0.
-    var g = h.makeGame({ turn: 'red', pieces: { 40: 'B' } });
+    var helpers = require('./helpers.js');
+    var g = helpers.makeGame({ turn: 'red', pieces: { 40: 'B' } });
     assert.deepStrictEqual(tb.getEntry(g.hashBase(), 99), { v: -1, d: 0 });
 });
