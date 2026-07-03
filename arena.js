@@ -65,6 +65,8 @@
 //   --draw-plies N       plies without progress adjudicated as a draw [50]
 //   --max-plies N        hard game-length cap, adjudicated as a draw [300]
 //   --referee WHICH      whose rules govern (same values as --a/--b) [new]
+//   --no-tablebase       play without endgame tablebases (both search players
+//                        share the mode-matching tablebase by default)
 //   --no-verify          skip shadow-replay divergence detection
 //   --verbose            per-game result lines
 
@@ -102,13 +104,35 @@ function deepCopy(obj) {
     return JSON.parse(JSON.stringify(obj));
 }
 
+// Endgame tablebases, loaded once per mode and shared by both players (the
+// reader object is duck-typed: every engine version's Search consumes
+// .tablebase via getEntry). Missing files degrade to tablebase-free play
+// with a warning.
+var tablebaseCache = {};
+function loadArenaTablebase(forced) {
+    var key = forced ? 'forced' : 'unforced';
+    if (!(key in tablebaseCache)) {
+        var file = path.join(__dirname, forced ? 'end8Forced' : 'end8Unforced');
+        try {
+            var raw = fs.readFileSync(file);
+            var ResultList2 = loadEngine('new').checkers.ResultList2;
+            tablebaseCache[key] = new ResultList2(
+                raw.buffer.slice(raw.byteOffset, raw.byteOffset + raw.byteLength));
+        } catch (e) {
+            console.error("tablebase " + file + " unavailable (" + e.message + "); playing without it");
+            tablebaseCache[key] = null;
+        }
+    }
+    return tablebaseCache[key];
+}
+
 function moveKeySet(game) {
     return game.getMoves().map(function (m) { return m.from + '>' + m.to; }).sort().join(',');
 }
 
 // spec: {engine: 'new'|'baseline', type: 'search'|'random', depth, seed,
 //        maxSeconds, searchOptions: {anyPublicSearchField: value}}
-function makePlayer(spec) {
+function makePlayer(spec, tablebase) {
     var engine = loadEngine(spec.engine);
     var label = spec.engine + (spec.type === 'random' ? ':random' : ':d' + spec.depth);
     var inner;
@@ -116,6 +140,9 @@ function makePlayer(spec) {
         inner = new engine.players.Random(spec.seed || 1);
     } else {
         inner = new engine.players.Search(spec.depth, spec.maxSeconds);
+        if (tablebase) {
+            inner.tablebase = tablebase;
+        }
         var optKeys = Object.keys(spec.searchOptions || {});
         optKeys.forEach(function (key) {
             if (!(key in inner)) {
@@ -253,6 +280,7 @@ function playMode(forced, opts) {
         shadowEngine = loadEngine(shadowName);
     }
 
+    var tablebase = opts.tablebase ? loadArenaTablebase(forced) : null;
     var rand = new referee.common.Random(opts.seed + (forced ? 0 : 1000000));
     var stats = {
         forced: forced, games: 0, aWins: 0, bWins: 0, draws: 0,
@@ -267,8 +295,8 @@ function playMode(forced, opts) {
             // Fresh players each game so paired games are exact mirrors when
             // the versions are identical.
             var players = {};
-            players[BLACK] = makePlayer(aIsBlack ? opts.a : opts.b);
-            players[RED] = makePlayer(aIsBlack ? opts.b : opts.a);
+            players[BLACK] = makePlayer(aIsBlack ? opts.a : opts.b, tablebase);
+            players[RED] = makePlayer(aIsBlack ? opts.b : opts.a, tablebase);
             var result = playGame(referee, players, opening, {
                 drawPlies: opts.drawPlies, maxPlies: opts.maxPlies, shadowEngine: shadowEngine
             });
@@ -320,7 +348,8 @@ function summarize(stats, opts) {
     var lines = [];
     lines.push("=== Forced jumps: " + stats.forced + " ===");
     lines.push("A=" + specLabel(opts.a) + "  B=" + specLabel(opts.b) +
-        "  referee=" + opts.referee + "  games=" + n);
+        "  referee=" + opts.referee + "  games=" + n +
+        "  tablebase=" + (opts.tablebase ? "on" : "off"));
     // Regression indicators come first: that is the arena's primary job.
     var alarmCount = stats.divergences.length + stats.illegalMoves.length + stats.playerErrors.length;
     lines.push("regression: divergences " + stats.divergences.length +
@@ -384,7 +413,8 @@ function normalizeOptions(o) {
         maxPlies: o.maxPlies || 300,
         referee: o.referee || 'new',
         verify: o.verify,
-        verbose: !!o.verbose
+        verbose: !!o.verbose,
+        tablebase: o.tablebase == null ? true : !!o.tablebase
     };
     if (opts.games % 2 === 1) opts.games++;
     if (opts.verify == null) {
@@ -426,7 +456,7 @@ function parseArgs(argv) {
         var arg = argv[i];
         if (arg.slice(0, 2) !== '--') throw new Error("unexpected argument: " + arg);
         var key = arg.slice(2);
-        var boolFlags = ['random-a', 'random-b', 'no-verify', 'verbose'];
+        var boolFlags = ['random-a', 'random-b', 'no-verify', 'verbose', 'no-tablebase'];
         if (boolFlags.indexOf(key) >= 0) {
             flags[key] = true;
         } else {
@@ -465,6 +495,7 @@ function parseArgs(argv) {
     if (flags['max-plies'] != null) o.maxPlies = parseInt(flags['max-plies'], 10);
     o.referee = flags['referee'] || 'new';
     if (flags['no-verify']) o.verify = false;
+    if (flags['no-tablebase']) o.tablebase = false;
     o.verbose = !!flags['verbose'];
     return o;
 }
@@ -494,6 +525,7 @@ if (require.main === module) {
 
 module.exports = {
     loadEngine: loadEngine,
+    loadArenaTablebase: loadArenaTablebase,
     makePlayer: makePlayer,
     genOpening: genOpening,
     playGame: playGame,

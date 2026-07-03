@@ -390,3 +390,41 @@ test('canonical v3 files contain no 54-bit key collisions (conversion provably l
             assert.strictEqual(collisions, 0, p + " has ambiguous 54-bit keys");
         });
     });
+
+test('search prefers the shorter tablebase win (distance-decay gradient)', function () {
+    var players = require('../players.js');
+    var common = require('../common.js');
+    // Two black kings vs a red king: every black move keeps a won position.
+    // A synthetic tablebase labels the children of two different first moves
+    // as red-to-move losses at different distances; the search must follow
+    // the shorter one. Run both assignments so move ordering cannot fake it.
+    function makeGame() {
+        var h = require('./helpers.js');
+        return h.makeGame({ turn: 'black', pieces: { 40: 'B', 48: 'B', 2: 'R' } });
+    }
+    var g = makeGame();
+    var moves = g.getMoves();
+    assert.ok(moves.length >= 2);
+    var mA = moves[0], mB = moves[1];
+    function childHash(move) {
+        var c = makeGame();
+        assert.ok(c.makeMove(new checkers.Move(move.from, move.to), true));
+        return c.hashBase();
+    }
+    var hA = childHash(mA), hB = childHash(mB);
+    function entry(h, d) {
+        return { h0: h.h0, h1Hi: (h.h1 >>> 16) & 0xFFFF, h1Lo: h.h1 & 0xFF,
+            resultAndDist: ((-1 + 1) << 6) | d }; // red to move, losing in d
+    }
+    [{ dA: 5, dB: 25, expect: mA }, { dA: 25, dB: 5, expect: mB }].forEach(function (c) {
+        var entries = [entry(hA, c.dA), entry(hB, c.dB)];
+        entries.sort(function (x, y) { return x.h0 - y.h0 || x.h1Hi - y.h1Hi; });
+        var tb = new checkers.ResultList2(checkers.buildTablebaseV3(entries, false));
+        var s = new players.Search(2);
+        s.evalDither = 0;
+        s.tablebase = tb;
+        var move = s.genMove(makeGame());
+        assert.strictEqual(move.from + '>' + move.to, c.expect.from + '>' + c.expect.to,
+            "must follow the d=" + Math.min(c.dA, c.dB) + " win");
+    });
+});

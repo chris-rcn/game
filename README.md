@@ -122,6 +122,23 @@ How it stays fair and meaningful:
 Run `node arena.js --help 2>/dev/null || head -50 arena.js` for the full flag
 list (documented in the header comment).
 
+### Endgame tablebases in the arena
+
+Arena search players load the mode-matching endgame tablebase by default
+(`--no-tablebase` to disable) — earlier experiments played endgames blind,
+which is now fixed. Alongside this, tablebase hits in the search are decayed
+by their distance-to-result (`v × 0.99999^d`): without that gradient every
+winning move ties at the same value and the engine meanders inside won
+regions instead of converting. The distance fix measured +29 Elo in forced
+mode (54.1% ± 4.9 over 400 games/mode vs value-only tablebase use; unforced
+flat at 50.4%, where games reach the ≤3-piece covered region far less often).
+
+**All prior tuning conclusions were re-validated with tablebases on**
+(depth 4): kingValue 1.4 vs 2.0 → 57.1% / 52.1% (confirmed, was 54.4/53.3
+blind); homeRow 0.1 vs 0 → 61.6% / 59.3% (confirmed, was 59.1/59.8);
+rank bonus 0.01 → 45.0% / 43.3% (still rejected); support 0.025+fullHome vs
+equal back-row raise → 49.0% / 43.3% over 200/mode (still rejected).
+
 ### Evaluation tuning protocol
 
 Eval parameters are learned, not assumed: scan candidates head-to-head via

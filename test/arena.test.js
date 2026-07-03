@@ -69,14 +69,15 @@ test('new vs baseline shows zero rules divergences; forced mode still ties exact
     // mode, but it provably cannot change forced-mode play (all-jump move
     // lists behave identically), and it never touches the rules, so the
     // shadow replay must stay divergence-free in both modes. kingValue is
-    // pinned to the baseline's hardcoded 2 so the forced-mode bit-identity
-    // property stays meaningful despite the learned default of 1.4.
+    // pinned to the baseline's hardcoded 2 and the tablebase is disabled so
+    // the forced-mode bit-identity property stays meaningful despite the
+    // learned eval default and the tablebase distance-decay fix.
     var match = arena.playMatch({
         games: 4, depth: 2, seed: 5,
         a: { engine: 'new', type: 'search', depth: 2, searchOptions: { kingValue: 2 } },
         b: { engine: 'baseline', type: 'search', depth: 2 },
         forcedModes: [true, false],
-        drawPlies: 40, maxPlies: 200, openingPlies: 6
+        drawPlies: 40, maxPlies: 200, openingPlies: 6, tablebase: false
     });
     assert.strictEqual(match.options.verify, true, "cross-version match should verify by default");
     match.results.forEach(function (stats) {
@@ -197,4 +198,17 @@ test('arena leaves both engine copies back in forced-jumps mode', function () {
         drawPlies: 30, maxPlies: 100 });
     assert.strictEqual(arena.loadEngine('new').checkers.getForcedJumps(), true);
     assert.strictEqual(arena.loadEngine('baseline').checkers.getForcedJumps(), true);
+});
+
+test('arena players receive the shared endgame tablebase by default', function () {
+    var fs = require('node:fs');
+    var path = require('node:path');
+    if (!fs.existsSync(path.join(__dirname, '..', 'end8Forced'))) return;
+    var tb = arena.loadArenaTablebase(true);
+    assert.ok(tb && typeof tb.getEntry === 'function');
+    assert.strictEqual(arena.loadArenaTablebase(true), tb, "loaded once and cached");
+    var p = arena.makePlayer({ engine: 'new', type: 'search', depth: 2 }, tb);
+    assert.strictEqual(p.inner.tablebase, tb);
+    var bare = arena.makePlayer({ engine: 'new', type: 'search', depth: 2 });
+    assert.strictEqual(bare.inner.tablebase, null);
 });

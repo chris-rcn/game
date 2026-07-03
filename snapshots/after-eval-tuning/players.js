@@ -144,14 +144,10 @@ CHF.checkers.players = function() {
             if (pub.tablebase && depth > 0) {
                 var tbEntry = pub.tablebase.getEntry(hash);
                 if (tbEntry) {
-                    // Decay by distance-to-result so tablebase hits carry a
-                    // conversion gradient in the search's own tie-break
-                    // currency: without it every winning move ties at v and
-                    // the engine meanders inside won regions (and the
-                    // defender fails to drag losses out).
-                    result.value = tbEntry.v * Math.pow(valueDecay, tbEntry.d);
+                    result.value = tbEntry.v;
                     result.valueIsKnown = true;
                     result.distanceFromRoot = depth + tbEntry.d;
+                    //logIndented(depth, fmt("Found {} in tablebase: value={}", JSON.stringify(hash), tbEntry.v));
                     return result;
                 }
             }
