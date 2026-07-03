@@ -154,6 +154,18 @@ blind); homeRow 0.1 vs 0 → 61.6% / 59.3% (confirmed, was 59.1/59.8);
 rank bonus 0.01 → 45.0% / 43.3% (still rejected); support 0.025+fullHome vs
 equal back-row raise → 49.0% / 43.3% over 200/mode (still rejected).
 
+### Search characteristics (measured)
+
+At depth 4 with current defaults: quiescence is worth **+219 Elo forced /
++163 unforced** at equal depth, versus **+165 / +153** for one extra ply
+without it — and head-to-head, d4-with-quiescence beats d5-without by
++72 / +23. Cost on identical position sets: quiescence multiplies wall time
+by ×2.4 (forced) and ×4.3 (unforced); an extra ply costs ×2.3 / ×3.1. So in
+forced mode quiescence delivers more strength than a ply at the same price;
+in unforced mode raw depth is marginally more time-efficient but quiescence
+still wins at equal depth. Note: the shipped UI runs `doQuiesce = false` —
+a difficulty decision worth revisiting, since it forfeits ~200 Elo.
+
 ### Evaluation tuning protocol
 
 Eval parameters are learned, not assumed: scan candidates head-to-head via
