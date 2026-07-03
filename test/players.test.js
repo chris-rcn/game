@@ -27,10 +27,6 @@ test('Search defaults to the learned king value of 1.4', function () {
     // whole scan bracketing it (every K<2 won, every K>2 lost).
     var s = new players.Search(3);
     assert.strictEqual(s.kingValue, 1.4);
-    // Pawn-advancement weight exists but was tested and REJECTED: every
-    // candidate (0.005-0.04/rank) scored at or below 50% against 0 at depths
-    // 4 and 5 (see README). It stays parameterized for future re-testing.
-    assert.strictEqual(s.rankValue, 0);
     // Back-row bonus was tested and ADOPTED: 59.4% ± 3.4 vs 0 over 800
     // depth-4 games, positive at depth 5, jointly stable with kingValue=1.4.
     assert.strictEqual(s.homeRowValue, 0.1);
@@ -39,12 +35,11 @@ test('Search defaults to the learned king value of 1.4', function () {
     assert.strictEqual(s.kingCenterValue, 0.05);
     // Runaway pawn bonus: ADOPTED (52.5%/53.3% ± 4.9 vs 0, 800 games).
     assert.strictEqual(s.runawayValue, 0.2);
-    // Pawn-support bonus was tested and REJECTED (see README): the natural
-    // variant was flat-to-harmful, and the back-row-counts-as-two variant
-    // only looked good by leaking extra back-row value — at equal back-row
-    // totals the support term LOST (45.8/44.6% vs plain homeRow 0.15).
-    assert.strictEqual(s.supportValue, 0);
-    assert.strictEqual(s.homeRowFullSupport, false);
+    // Rejected candidates (rankValue, supportValue, homeRowFullSupport,
+    // runawayGraded) were REMOVED after arena testing; README.md keeps the
+    // measurements, and unknown searchOptions are rejected by the arena.
+    assert.strictEqual(s.rankValue, undefined);
+    assert.strictEqual(s.supportValue, undefined);
     // Tablebase defaults to auto (undefined): on wherever a table can be
     // resolved, off only when explicitly set to null.
     assert.strictEqual(s.tablebase, undefined);

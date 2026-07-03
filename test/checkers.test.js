@@ -305,55 +305,30 @@ test('materialEvalBlack accepts a custom king weight', function () {
     assert.strictEqual(pawns.materialEvalBlack(1.5), pawns.materialEvalBlack(3));
 });
 
-test('materialEvalBlack accepts a per-rank pawn advancement weight', function () {
-    // Black pawn on 40 is on forward rank 3; red pawn on 2 is on forward
-    // rank 0. With rankWeight 0.1: black = 1.3, red = 1.0.
-    var g = h.makeGame({ turn: 'black', pieces: { 40: 'b', 2: 'r' } });
-    assert.ok(Math.abs(g.materialEvalBlack(2, 0.1) - 1.3 / 2.3) < 1e-12);
-    assert.strictEqual(g.materialEvalBlack(2, 0), g.materialEvalBlack(2));
-    // Kings carry no rank term.
-    var kings = h.makeGame({ turn: 'black', pieces: { 40: 'B', 2: 'R' } });
-    assert.strictEqual(kings.materialEvalBlack(2, 0.1), kings.materialEvalBlack(2, 0));
-});
-
 test('materialEvalBlack accepts a home-row pawn bonus', function () {
     // Black pawn on 64 guards black's back row (forward rank 0); black pawn
     // on 40 (rank 3) and red pawn on 20 (rank 2) do not guard theirs.
     var g = h.makeGame({ turn: 'black', pieces: { 64: 'b', 40: 'b', 20: 'r' } });
     // black = (1 + 0.1) + 1 = 2.1, red = 1
-    assert.ok(Math.abs(g.materialEvalBlack(2, 0, 0.1) - 2.1 / 3.1) < 1e-12);
-    assert.strictEqual(g.materialEvalBlack(2, 0, 0), g.materialEvalBlack(2));
+    assert.ok(Math.abs(g.materialEvalBlack(2, 0.1) - 2.1 / 3.1) < 1e-12);
+    assert.strictEqual(g.materialEvalBlack(2, 0), g.materialEvalBlack(2));
     // Kings on the back row get no bonus.
     var kings = h.makeGame({ turn: 'black', pieces: { 64: 'B', 2: 'R' } });
-    assert.strictEqual(kings.materialEvalBlack(2, 0, 0.1), kings.materialEvalBlack(2, 0, 0));
-});
-
-test('materialEvalBlack counts pawn support behind (tested, rejected, default off)', function () {
-    // Black pawns on 48 and 50 sit diagonally behind the black pawn on 40
-    // (they occupy a jumper's landing squares); neither of them is supported.
-    var g = h.makeGame({ turn: 'black', pieces: { 40: 'b', 48: 'b', 50: 'b', 20: 'r' } });
-    // black = 3 + 2 supports * 0.1, red = 1
-    assert.ok(Math.abs(g.materialEvalBlack(2, 0, 0, 0.1, false) - 3.2 / 4.2) < 1e-12);
-    // Back-row pawn: no behind squares; homeRowFullSupport decides.
-    var home = h.makeGame({ turn: 'black', pieces: { 64: 'b', 20: 'r' } });
-    assert.ok(Math.abs(home.materialEvalBlack(2, 0, 0, 0.1, false) - 1 / 2) < 1e-12);
-    assert.ok(Math.abs(home.materialEvalBlack(2, 0, 0, 0.1, true) - 1.2 / 2.2) < 1e-12);
-    // Default off is exactly the previous eval.
-    assert.strictEqual(g.materialEvalBlack(2, 0, 0, 0, false), g.materialEvalBlack(2));
+    assert.strictEqual(kings.materialEvalBlack(2, 0.1), kings.materialEvalBlack(2, 0));
 });
 
 test('home-row bonus applies only while the opponent still has pawns to king', function () {
     // Guarding the back row against a kings-only opponent prevents nothing.
     var vsKing = h.makeGame({ turn: 'black', pieces: { 64: 'b', 2: 'R' } });
-    assert.strictEqual(vsKing.materialEvalBlack(2, 0, 0.1), vsKing.materialEvalBlack(2, 0, 0));
+    assert.strictEqual(vsKing.materialEvalBlack(2, 0.1), vsKing.materialEvalBlack(2, 0));
     var vsPawn = h.makeGame({ turn: 'black', pieces: { 64: 'b', 20: 'r' } });
-    assert.ok(vsPawn.materialEvalBlack(2, 0, 0.1) > vsPawn.materialEvalBlack(2, 0, 0));
+    assert.ok(vsPawn.materialEvalBlack(2, 0.1) > vsPawn.materialEvalBlack(2, 0));
     // One-sided: red keeps its bonus while black still has pawns, even if
     // black has lost its own claim.
     var mixed = h.makeGame({ turn: 'black', pieces: { 64: 'b', 2: 'r', 4: 'R' } });
     // red home pawn on 2 counts 1.1 (black has a pawn); black home pawn on
     // 64 counts 1.1 too (red has a pawn on 2).
-    assert.ok(Math.abs(mixed.materialEvalBlack(2, 0, 0.1) - 1.1 / (1.1 + 1.1 + 2)) < 1e-12);
+    assert.ok(Math.abs(mixed.materialEvalBlack(2, 0.1) - 1.1 / (1.1 + 1.1 + 2)) < 1e-12);
 });
 
 test('materialEvalBlack accepts a king edge-distance (centralization) bonus', function () {
@@ -361,13 +336,13 @@ test('materialEvalBlack accepts a king edge-distance (centralization) bonus', fu
     // (0, 1): on the edge. With kingCenterBonus 0.1: black king = 2 + 0.3,
     // red king = 2 + 0.
     var g = h.makeGame({ turn: 'black', pieces: { 40: 'B', 2: 'R' } });
-    assert.ok(Math.abs(g.materialEvalBlack(2, 0, 0, 0, false, 0.1) - 2.3 / 4.3) < 1e-12);
+    assert.ok(Math.abs(g.materialEvalBlack(2, 0, 0.1) - 2.3 / 4.3) < 1e-12);
     // Intermediate rings: loc 12 is (1, 2) -> 1 step; loc 22 is (2, 3) -> 2.
     var rings = h.makeGame({ turn: 'black', pieces: { 12: 'B', 22: 'R' } });
-    assert.ok(Math.abs(rings.materialEvalBlack(2, 0, 0, 0, false, 0.1) - 2.1 / 4.3) < 1e-12);
+    assert.ok(Math.abs(rings.materialEvalBlack(2, 0, 0.1) - 2.1 / 4.3) < 1e-12);
     // Pawns carry no centralization term.
     var pawns = h.makeGame({ turn: 'black', pieces: { 40: 'b', 20: 'r' } });
-    assert.strictEqual(pawns.materialEvalBlack(2, 0, 0, 0, false, 0.1),
+    assert.strictEqual(pawns.materialEvalBlack(2, 0, 0.1),
         pawns.materialEvalBlack(2));
 });
 
@@ -375,41 +350,34 @@ test('materialEvalBlack accepts a runaway (unblocked) pawn bonus', function () {
     // Black pawn on 40 = (4, 3) advances toward row 0; its cone at k steps
     // ahead spans cols 3±k. Red king on 50 = (5, 4) is BEHIND it: runaway.
     var clear = h.makeGame({ turn: 'black', pieces: { 40: 'b', 50: 'R' } });
-    assert.ok(Math.abs(clear.materialEvalBlack(2, 0, 0, 0, false, 0, 0.3) - 1.3 / 3.3) < 1e-12);
+    assert.ok(Math.abs(clear.materialEvalBlack(2, 0, 0, 0.3) - 1.3 / 3.3) < 1e-12);
     // Red king on 22 = (2, 3) is inside the cone: no bonus.
     var blocked = h.makeGame({ turn: 'black', pieces: { 40: 'b', 22: 'R' } });
-    assert.strictEqual(blocked.materialEvalBlack(2, 0, 0, 0, false, 0, 0.3),
+    assert.strictEqual(blocked.materialEvalBlack(2, 0, 0, 0.3),
         blocked.materialEvalBlack(2));
     // A FRIENDLY piece in the cone does not block (it can step aside), and
     // is itself a runaway here: both black pawns collect the bonus.
     var friendly = h.makeGame({ turn: 'black', pieces: { 40: 'b', 30: 'b', 50: 'R' } });
-    assert.ok(Math.abs(friendly.materialEvalBlack(2, 0, 0, 0, false, 0, 0.3) - 2.6 / 4.6) < 1e-12);
+    assert.ok(Math.abs(friendly.materialEvalBlack(2, 0, 0, 0.3) - 2.6 / 4.6) < 1e-12);
     // Works for red (advancing toward row 7), with the cone clipped at the
     // board edge (no wrap past col 7): red pawn on 44 = (4, 7) has cone
     // {52, 60, 62, 68, 70}; a black king on 2 is far outside it, one on
     // 52 = (5, 6) blocks it, and one on 58 = (6, 3) sits just OUTSIDE the
     // clipped cone and must not block.
     var red = h.makeGame({ turn: 'black', pieces: { 44: 'r', 2: 'B' } });
-    assert.ok(Math.abs(red.materialEvalBlack(2, 0, 0, 0, false, 0, 0.3) - 2 / 3.3) < 1e-12);
+    assert.ok(Math.abs(red.materialEvalBlack(2, 0, 0, 0.3) - 2 / 3.3) < 1e-12);
     var redBlocked = h.makeGame({ turn: 'black', pieces: { 44: 'r', 52: 'B' } });
-    assert.strictEqual(redBlocked.materialEvalBlack(2, 0, 0, 0, false, 0, 0.3),
+    assert.strictEqual(redBlocked.materialEvalBlack(2, 0, 0, 0.3),
         redBlocked.materialEvalBlack(2));
     var redEdge = h.makeGame({ turn: 'black', pieces: { 44: 'r', 58: 'B' } });
-    assert.ok(Math.abs(redEdge.materialEvalBlack(2, 0, 0, 0, false, 0, 0.3) - 2 / 3.3) < 1e-12);
+    assert.ok(Math.abs(redEdge.materialEvalBlack(2, 0, 0, 0.3) - 2 / 3.3) < 1e-12);
     // In the opening every cone is blocked, so the bonus changes nothing.
     var opening = new checkers.Game();
-    assert.strictEqual(opening.materialEvalBlack(2, 0, 0, 0, false, 0, 0.3),
+    assert.strictEqual(opening.materialEvalBlack(2, 0, 0, 0.3),
         opening.materialEvalBlack(2));
-    // Defaults off: the 7-arg call with zeros is exactly the base eval.
-    assert.strictEqual(clear.materialEvalBlack(2, 0, 0, 0, false, 0, 0),
+    // Defaults off: the full-arg call with zeros is exactly the base eval.
+    assert.strictEqual(clear.materialEvalBlack(2, 0, 0, 0),
         clear.materialEvalBlack(2));
-    // Graded variant scales by forwardRank/6: the black pawn on 40 is on
-    // forward rank 3, so it collects half the bonus (0.3 * 3/6 = 0.15).
-    assert.ok(Math.abs(clear.materialEvalBlack(2, 0, 0, 0, false, 0, 0.3, true) - 1.15 / 3.15) < 1e-12);
-    // A blocked pawn collects nothing in either variant.
-    var blocked2 = h.makeGame({ turn: 'black', pieces: { 40: 'b', 22: 'R' } });
-    assert.strictEqual(blocked2.materialEvalBlack(2, 0, 0, 0, false, 0, 0.3, true),
-        blocked2.materialEvalBlack(2));
 });
 
 test('forwardRank counts from each side\'s home row', function () {

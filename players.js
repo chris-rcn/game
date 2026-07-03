@@ -108,14 +108,11 @@ CHF.checkers.players = function() {
         // it and every candidate above lost; 1.4 — the checkers-literature
         // ballpark — scored 53.7% ± 3.1 against 2.0 over 1000 games.
         pub.kingValue = 1.4;
-        pub.rankValue = 0; // per-rank pawn advancement, in pawn units
         // Extra worth of a pawn still guarding the back row.  Learned by
         // arena self-play vs 0 (all candidates 0.05-0.4 won; 0.1 peaked):
         // 59.4% ± 3.4 over 800 games at depth 4, 53.3% at depth 5, with
         // kingValue=1.4 re-verified as stable alongside it.
         pub.homeRowValue = 0.1;
-        pub.supportValue = 0; // per friendly piece diagonally behind a pawn
-        pub.homeRowFullSupport = false; // back-row pawn counts as 2 supports
         // Per edge-distance step (0..3) of each king, pricing mobility and
         // corner-trappability. REJECTED before repetition handling existed
         // (mixed signs — centralization edges dissipated into shuffling and
@@ -132,11 +129,12 @@ CHF.checkers.players = function() {
         // 0.2 confirmed at 52.5%/53.3% ± 4.9 over 800 games at depth 4,
         // with kingValue=1.4 re-verified as stable alongside it.
         pub.runawayValue = 0.2;
-        pub.runawayGraded = false; // scale runawayValue by forwardRank/6
+        // Rejected candidates (rankValue, supportValue, homeRowFullSupport,
+        // runawayGraded) were removed after arena testing; README.md keeps
+        // the measurements.
         pub.evalFunction = function(game) {
-            return game.materialEval(pub.kingValue, pub.rankValue, pub.homeRowValue,
-                pub.supportValue, pub.homeRowFullSupport,
-                pub.kingCenterValue, pub.runawayValue, pub.runawayGraded);
+            return game.materialEval(pub.kingValue, pub.homeRowValue,
+                pub.kingCenterValue, pub.runawayValue);
         };
         pub.evalDither = 0.001;
         // Extension budget beyond maxDepth while a capture is pending (or

@@ -887,9 +887,9 @@ CHF.checkers = function() {
             return (color & RED) ? rank(loc) : boardSizeM1-rank(loc);
         }
         pub.forwardRank = forwardRank;
-        function materialEval(kingWeight, rankWeight, homeRowBonus, supportBonus, homeRowFullSupport, kingCenterBonus, runawayBonus, runawayGraded) {
+        function materialEval(kingWeight, homeRowBonus, kingCenterBonus, runawayBonus) {
             var polarity = turn === BLACK ? 1 : -1;
-            return polarity * (2 * materialEvalBlack(kingWeight, rankWeight, homeRowBonus, supportBonus, homeRowFullSupport, kingCenterBonus, runawayBonus, runawayGraded) - 1);
+            return polarity * (2 * materialEvalBlack(kingWeight, homeRowBonus, kingCenterBonus, runawayBonus) - 1);
         }
         // Steps from the nearest board edge: 0 (on an edge) .. 3 (the four
         // center squares).  An edge king has at most half a center king's
@@ -926,36 +926,27 @@ CHF.checkers = function() {
             }
             return true;
         }
-        // A pawn counts 1 + rankWeight * forwardRank (its progress toward
-        // kinging) + homeRowBonus if it still guards the back row; folding
-        // these into the material ratio keeps them phase-scaled the same way
-        // material itself is.  The back-row bonus prices kinging PREVENTION,
-        // so it applies only while the opponent still has pawns to king —
-        // against a kings-only opponent, staying home is worthless.
-        // supportBonus is awarded per friendly piece diagonally BEHIND a pawn
-        // (0, 1 or 2): a supporter occupies the square a jumper would land
-        // on, so support measures un-capturability from the front.  A back-
-        // row pawn has no behind squares; homeRowFullSupport decides whether
-        // that counts as fully supported (it is literally unjumpable) or as
-        // nothing (its safety is already priced by homeRowBonus).
-        // kingCenterBonus is awarded per edge-distance step (0..3) of each
-        // king, pricing centralization; runawayBonus is awarded to each
-        // runaway pawn (see pawnIsRunaway), pricing a coronation beyond the
-        // horizon at a discount to the kinged difference (kingWeight - 1).
-        // runawayGraded scales that bonus by forwardRank/6 — a runaway one
-        // step from kinging collects the full bonus, one far from it almost
-        // nothing, matching how certain the coronation actually is.
-        function materialEvalBlack(kingWeight, rankWeight, homeRowBonus, supportBonus, homeRowFullSupport, kingCenterBonus, runawayBonus, runawayGraded) {
+        // A pawn counts 1 + homeRowBonus while it still guards the back
+        // row; folding bonuses into the material ratio keeps them
+        // phase-scaled the same way material itself is.  The back-row bonus
+        // prices kinging PREVENTION, so it applies only while the opponent
+        // still has pawns to king — against a kings-only opponent, staying
+        // home is worthless.  kingCenterBonus is awarded per edge-distance
+        // step (0..3) of each king, pricing centralization; runawayBonus is
+        // awarded to each runaway pawn (see pawnIsRunaway), pricing a
+        // coronation beyond the horizon at a discount to the kinged
+        // difference (kingWeight - 1).  Rejected features (per-rank
+        // advancement, support-behind, graded runaway) were removed after
+        // arena testing; the measurements live in README.md.
+        function materialEvalBlack(kingWeight, homeRowBonus, kingCenterBonus, runawayBonus) {
             kingWeight = kingWeight || 2;
-            rankWeight = rankWeight || 0;
             homeRowBonus = homeRowBonus || 0;
-            supportBonus = supportBonus || 0;
             kingCenterBonus = kingCenterBonus || 0;
             runawayBonus = runawayBonus || 0;
             var black = 0;
             var red = 0;
             var blackPawns = 0, redPawns = 0, blackHome = 0, redHome = 0;
-            var i, loc, fr, checkersColor;
+            var i, loc, checkersColor;
             checkersColor = checkers[BLACK];
             for (i=0; i<checkersColor.length; i++) {
                 loc = checkersColor[i];
@@ -964,18 +955,9 @@ CHF.checkers = function() {
                     if (kingCenterBonus) black += kingCenterBonus * edgeDistance(loc);
                 } else {
                     blackPawns++;
-                    fr = forwardRank(loc, BLACK);
-                    black += 1 + rankWeight * fr;
-                    if (fr === 0) {
-                        blackHome++;
-                        if (homeRowFullSupport) black += 2 * supportBonus;
-                    } else if (supportBonus) {
-                        if ((squares[loc + boardSize] & BLACK)) black += supportBonus;
-                        if ((squares[loc + maxDiagonalOffset] & BLACK)) black += supportBonus;
-                    }
-                    if (runawayBonus && pawnIsRunaway(loc, BLACK)) {
-                        black += runawayGraded ? runawayBonus * fr / 6 : runawayBonus;
-                    }
+                    black += 1;
+                    if (forwardRank(loc, BLACK) === 0) blackHome++;
+                    if (runawayBonus && pawnIsRunaway(loc, BLACK)) black += runawayBonus;
                 }
             }
             checkersColor = checkers[RED];
@@ -986,18 +968,9 @@ CHF.checkers = function() {
                     if (kingCenterBonus) red += kingCenterBonus * edgeDistance(loc);
                 } else {
                     redPawns++;
-                    fr = forwardRank(loc, RED);
-                    red += 1 + rankWeight * fr;
-                    if (fr === 0) {
-                        redHome++;
-                        if (homeRowFullSupport) red += 2 * supportBonus;
-                    } else if (supportBonus) {
-                        if ((squares[loc - boardSize] & RED)) red += supportBonus;
-                        if ((squares[loc - maxDiagonalOffset] & RED)) red += supportBonus;
-                    }
-                    if (runawayBonus && pawnIsRunaway(loc, RED)) {
-                        red += runawayGraded ? runawayBonus * fr / 6 : runawayBonus;
-                    }
+                    red += 1;
+                    if (forwardRank(loc, RED) === 0) redHome++;
+                    if (runawayBonus && pawnIsRunaway(loc, RED)) red += runawayBonus;
                 }
             }
             if (redPawns > 0) black += homeRowBonus * blackHome;
