@@ -234,15 +234,36 @@ since it buys exactly the refutation one ply past the horizon. (Earlier
 ×2.4/×4.3 full-quiescence cost figures were JIT-warmup-inflated; warmed
 costs are ×2.2/×3.7.)
 
-The UI plays the engine default `quiesceDepth = 1` at every level (levels
-remain pure depth; the UI sets nothing). Measured ladder (forced/unforced,
-200 games/mode): L1→L2 +255/+207, L2→L3 +207/+225, L3→L4 +238/+151 —
-near-uniform steps with no beginner cliff. The entry level plays "greedy
-but not suicidal" (it beat the original piece-hanging L1 200-0-0); the old
-punching bag was deliberately not retained. Two alternatives were measured
-and set aside: `qd = level − 1` (restores the punching bag but steepens the
-early ladder: +1040/∞, +301/+266, …) and a hand-built level table (messy to
-describe).
+### UI levels are node budgets (`nodeLimit = 12 × 2^(level−1)`)
+
+UI levels meter thinking *effort*, not lookahead: level N gives the
+engine a budget of `12 × 2^(level−1)` nodes per move (`Search.nodeLimit`
+riding iterative deepening; `maxDepth = 32` remains only a hard cap so
+tablebase-covered positions cannot deepen without bound). The anchor 12
+is the measured average cost of a depth-1 search including its
+quiescence bonus (12.26 forced / 12.58 unforced nodes per move over 60
+games), so **level 1 plays essentially the old depth-1 level**, and each
+level doubles the budget from there. Budgets are device-independent and
+deterministic — unlike time limits, the same level plays identically on
+any hardware — and they self-allocate: the same spend searches deeper
+where subtrees are cheap (forced sequences, tablebase-covered regions)
+and shallower in expensive quiet positions, which also compresses the
+worst-case-to-median move-time ratio from the depth ladder's 12–16× to
+4–7×. Calibration: budget ≈ depth equivalents measured at 30 ≈ d1,
+100 ≈ d2, 2000 ≈ d4, ~4500 ≈ d5, ~10000 ≈ d6 (so the doubling ladder
+crosses old depth N around level 1.6N − 1.6, reaching d6 strength near
+level 11 with headroom above that the depth ladder could not afford).
+
+The previous depth-based ladder (levels = pure depth at the engine
+default `quiesceDepth = 1`) measured L1→L2 +255/+207, L2→L3 +207/+225,
+L3→L4 +238/+151 over 200 games/mode — near-uniform steps with no
+beginner cliff. The entry level plays "greedy but not suicidal" (it beat
+the original piece-hanging L1 200-0-0); the old punching bag was
+deliberately not retained. Alternatives measured and set aside along the
+way: `qd = level − 1` (restores the punching bag but steepens the early
+ladder: +1040/∞, +301/+266, …), a hand-built level table (messy to
+describe), and a threshold-triggered endgame bonus ply (the threshold
+that bought Elo also ~2.4×'d the worst-case move time; reverted).
 
 Quiescence-vs-depth crossover: in Elo per doubling of think time, forced
 mode favors quiescence from depth 4 on (175 vs 140, then 151 vs 146; by

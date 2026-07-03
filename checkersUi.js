@@ -288,9 +288,14 @@ CHF.checkers.ui = function() {
             value = 1;
         }
         value = Math.max(1, value);
-        player.maxDepth = value;
-        // Levels are pure depth; the engine's default quiesceDepth = 1
-        // applies at every level, giving a near-uniform ladder (see README).
+        // Levels meter thinking EFFORT, not lookahead: each level doubles a
+        // node budget anchored at the measured average cost of a depth-1
+        // search including its quiescence bonus (12 nodes/move). Budgets
+        // are device-independent and deterministic, and self-allocate depth
+        // where nodes are cheap (see README). maxDepth is only a hard cap
+        // so tablebase-covered positions cannot deepen without bound.
+        player.maxDepth = 32;
+        player.nodeLimit = 12 * Math.pow(2, value - 1);
         level.innerHTML = "Level: " + value;
         try {
             localStorage.setItem("level", value);
