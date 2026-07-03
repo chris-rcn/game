@@ -163,8 +163,8 @@ without it — and head-to-head, d4-with-quiescence beats d5-without by
 by ×2.4 (forced) and ×4.3 (unforced); an extra ply costs ×2.3 / ×3.1. So in
 forced mode quiescence delivers more strength than a ply at the same price;
 in unforced mode raw depth is marginally more time-efficient but quiescence
-still wins at equal depth. Note: the shipped UI runs `doQuiesce = false` —
-a difficulty decision worth revisiting, since it forfeits ~200 Elo.
+still wins at equal depth. (The originally shipped UI ran with quiescence
+fully off, forfeiting ~200 Elo; it now plays `quiesceDepth = 1` — see below.)
 
 `doQuiesce` was converted to a graded budget, `Search.quiesceDepth`: the
 number of plies past the horizon the search may extend while a capture is
@@ -176,8 +176,16 @@ qd2→∞ +60/+14 for ×1.11/×1.56. The first budget ply delivers +232/+129 Elo
 per time-doubling — better than a full ply (+140/+93) in **both** modes,
 since it buys exactly the refutation one ply past the horizon. (Earlier
 ×2.4/×4.3 full-quiescence cost figures were JIT-warmup-inflated; warmed
-costs are ×2.2/×3.7.) The UI keeps its handicap as `quiesceDepth = 0` and
-can now build level rungs from (depth, quiesceDepth) pairs.
+costs are ×2.2/×3.7.)
+
+The UI now plays `quiesceDepth = 1` at every level (levels remain pure
+depth — simple to describe). Measured consequences: the level ladder
+becomes nearly uniform — L1→L2 +255/+207 Elo, L2→L3 +207/+225, L3→L4
++238/+151 (forced/unforced) vs the old 920/319/237/165 cliff — because one
+capture ply removes the piece-hanging that dominated shallow-depth play.
+The entry level is accordingly much stronger than the old one (new L1 beat
+old L1 200-0-0 forced, 98.8% unforced); if a true beginner level is ever
+wanted again, dither scaling is the available lever.
 
 Quiescence-vs-depth crossover: in Elo per doubling of think time, forced
 mode favors quiescence from depth 4 on (175 vs 140, then 151 vs 146; by
@@ -194,8 +202,9 @@ cannot see the opponent's reply and hangs material constantly), d2→d3
 +319/+250, d3→d4 +237/+229, d4→d5 +165/+153 — roughly 0.72× per step after
 the first. Quiescence at d4 (+219/+163) is worth more than the uniform
 d4→d5 ply because it extends selectively where the horizon lies. Product
-note: the UI's level ladder is linear in depth but wildly nonlinear in
-strength (level 1→2 ≈ 1000 Elo, level 4→5 ≈ 160).
+note: the UI's level ladder was linear in depth but wildly nonlinear in
+strength (level 1→2 ≈ 1000 Elo, level 4→5 ≈ 160) — addressed by playing
+`quiesceDepth = 1` at every level, which makes the rungs nearly uniform.
 
 ### Evaluation tuning protocol
 

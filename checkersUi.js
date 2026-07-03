@@ -27,7 +27,10 @@ CHF.checkers.ui = function() {
     var animationVelocity = 1 / animationFrames;
     var randPlayer = new players.Random();
     var player = new players.Search(1);
-    player.quiesceDepth = 0; // difficulty handicap; see README for the cost
+    // Levels are pure search depth; one ply of capture-extension budget at
+    // every level keeps the engine from hanging pieces and makes the level
+    // ladder nearly uniform (~+150-250 Elo per level; see README).
+    player.quiesceDepth = 1;
     var ignoreButtons = false;
     var computerPlaysRed = true;
     var computerPlaysBlack = false;
