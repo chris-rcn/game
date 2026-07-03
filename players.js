@@ -130,11 +130,28 @@ CHF.checkers.players = function() {
         // with kingValue=1.4 re-verified as stable alongside it.
         pub.runawayValue = 0.2;
         // Rejected candidates (rankValue, supportValue, homeRowFullSupport,
-        // runawayGraded) were removed after arena testing; README.md keeps
-        // the measurements.
-        pub.evalFunction = function(game) {
-            return game.materialEval(pub.kingValue, pub.homeRowValue,
+        // runawayGraded, mobilityValue) were removed after arena testing;
+        // README.md keeps the measurements.
+        // Per capture move available to the SIDE TO MOVE at eval time, in
+        // final-eval units. The refined survivor of the rejected mobility
+        // idea: slides carry no signal (measured harmful at every weight),
+        // but available jumps signal material about to be won — exactly at
+        // the leaves where the quiescence budget ran out.
+        pub.captureThreatValue = 0;
+        pub.evalFunction = function(game, depth, moves) {
+            var e = game.materialEval(pub.kingValue, pub.homeRowValue,
                 pub.kingCenterValue, pub.runawayValue);
+            if (pub.captureThreatValue && moves && moves.length &&
+                    isJumpMove(moves[0])) {
+                // Jumps are generated before slides, so moves[0] is a jump
+                // iff any jump exists; count the jump prefix.
+                var jumps = 1;
+                while (jumps < moves.length && isJumpMove(moves[jumps])) {
+                    jumps++;
+                }
+                e += pub.captureThreatValue * jumps;
+            }
+            return e;
         };
         // Uniform ±d/2 noise on each leaf eval: above the valueDecay
         // tie-break scale, below the learned eval terms. Originally 0.001

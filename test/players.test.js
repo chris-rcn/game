@@ -462,3 +462,22 @@ test('node-budgeted moves are deterministic for a given budget', function () {
     }
     assert.strictEqual(move(2000), move(2000));
 });
+
+test('captureThreatValue adds a per-available-jump bonus for the mover', function () {
+    // Black pawn on 40 can jump 32 (landing 24) — one capture available.
+    checkers.setForcedJumps(true);
+    var g = h.makeGame({ turn: 'black', pieces: { 40: 'b', 32: 'r', 26: 'r' } });
+    var moves = g.getMoves();
+    assert.strictEqual(new players.Search(3).captureThreatValue, 0, "gated off by default");
+    var s = newSearch(1);
+    var base = s.evalFunction(g, 0, moves);
+    s.captureThreatValue = 0.03;
+    assert.ok(Math.abs(s.evalFunction(g, 0, moves) - (base + 0.03)) < 1e-12,
+        "one jump available -> one bonus");
+    // Quiet position: no bonus.
+    var quiet = h.makeGame({ turn: 'black', pieces: { 40: 'b', 2: 'r' } });
+    var qm = quiet.getMoves();
+    var qBase = s.evalFunction(quiet, 0, qm);
+    s.captureThreatValue = 0;
+    assert.strictEqual(s.evalFunction(quiet, 0, qm), qBase, "slides carry no bonus");
+});
