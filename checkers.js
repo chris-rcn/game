@@ -730,9 +730,9 @@ CHF.checkers = function() {
             return (color & RED) ? rank(loc) : boardSizeM1-rank(loc);
         }
         pub.forwardRank = forwardRank;
-        function materialEval(kingWeight, rankWeight, homeRowBonus) {
+        function materialEval(kingWeight, rankWeight, homeRowBonus, supportBonus, homeRowFullSupport) {
             var polarity = turn === BLACK ? 1 : -1;
-            return polarity * (2 * materialEvalBlack(kingWeight, rankWeight, homeRowBonus) - 1);
+            return polarity * (2 * materialEvalBlack(kingWeight, rankWeight, homeRowBonus, supportBonus, homeRowFullSupport) - 1);
         }
         // A pawn counts 1 + rankWeight * forwardRank (its progress toward
         // kinging) + homeRowBonus if it still guards the back row; folding
@@ -740,10 +740,17 @@ CHF.checkers = function() {
         // material itself is.  The back-row bonus prices kinging PREVENTION,
         // so it applies only while the opponent still has pawns to king —
         // against a kings-only opponent, staying home is worthless.
-        function materialEvalBlack(kingWeight, rankWeight, homeRowBonus) {
+        // supportBonus is awarded per friendly piece diagonally BEHIND a pawn
+        // (0, 1 or 2): a supporter occupies the square a jumper would land
+        // on, so support measures un-capturability from the front.  A back-
+        // row pawn has no behind squares; homeRowFullSupport decides whether
+        // that counts as fully supported (it is literally unjumpable) or as
+        // nothing (its safety is already priced by homeRowBonus).
+        function materialEvalBlack(kingWeight, rankWeight, homeRowBonus, supportBonus, homeRowFullSupport) {
             kingWeight = kingWeight || 2;
             rankWeight = rankWeight || 0;
             homeRowBonus = homeRowBonus || 0;
+            supportBonus = supportBonus || 0;
             var black = 0;
             var red = 0;
             var blackPawns = 0, redPawns = 0, blackHome = 0, redHome = 0;
@@ -757,7 +764,13 @@ CHF.checkers = function() {
                     blackPawns++;
                     fr = forwardRank(loc, BLACK);
                     black += 1 + rankWeight * fr;
-                    if (fr === 0) blackHome++;
+                    if (fr === 0) {
+                        blackHome++;
+                        if (homeRowFullSupport) black += 2 * supportBonus;
+                    } else if (supportBonus) {
+                        if ((squares[loc + boardSize] & BLACK)) black += supportBonus;
+                        if ((squares[loc + maxDiagonalOffset] & BLACK)) black += supportBonus;
+                    }
                 }
             }
             checkersColor = checkers[RED];
@@ -769,7 +782,13 @@ CHF.checkers = function() {
                     redPawns++;
                     fr = forwardRank(loc, RED);
                     red += 1 + rankWeight * fr;
-                    if (fr === 0) redHome++;
+                    if (fr === 0) {
+                        redHome++;
+                        if (homeRowFullSupport) red += 2 * supportBonus;
+                    } else if (supportBonus) {
+                        if ((squares[loc - boardSize] & RED)) red += supportBonus;
+                        if ((squares[loc - maxDiagonalOffset] & RED)) red += supportBonus;
+                    }
                 }
             }
             if (redPawns > 0) black += homeRowBonus * blackHome;

@@ -328,6 +328,20 @@ test('materialEvalBlack accepts a home-row pawn bonus', function () {
     assert.strictEqual(kings.materialEvalBlack(2, 0, 0.1), kings.materialEvalBlack(2, 0, 0));
 });
 
+test('materialEvalBlack counts pawn support behind (tested, rejected, default off)', function () {
+    // Black pawns on 48 and 50 sit diagonally behind the black pawn on 40
+    // (they occupy a jumper's landing squares); neither of them is supported.
+    var g = h.makeGame({ turn: 'black', pieces: { 40: 'b', 48: 'b', 50: 'b', 20: 'r' } });
+    // black = 3 + 2 supports * 0.1, red = 1
+    assert.ok(Math.abs(g.materialEvalBlack(2, 0, 0, 0.1, false) - 3.2 / 4.2) < 1e-12);
+    // Back-row pawn: no behind squares; homeRowFullSupport decides.
+    var home = h.makeGame({ turn: 'black', pieces: { 64: 'b', 20: 'r' } });
+    assert.ok(Math.abs(home.materialEvalBlack(2, 0, 0, 0.1, false) - 1 / 2) < 1e-12);
+    assert.ok(Math.abs(home.materialEvalBlack(2, 0, 0, 0.1, true) - 1.2 / 2.2) < 1e-12);
+    // Default off is exactly the previous eval.
+    assert.strictEqual(g.materialEvalBlack(2, 0, 0, 0, false), g.materialEvalBlack(2));
+});
+
 test('home-row bonus applies only while the opponent still has pawns to king', function () {
     // Guarding the back row against a kings-only opponent prevents nothing.
     var vsKing = h.makeGame({ turn: 'black', pieces: { 64: 'b', 2: 'R' } });

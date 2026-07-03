@@ -173,6 +173,23 @@ within its horizon — so a blanket advancement gradient pushes pawns into
 danger without buying anything. The knob stays (default 0, exactly the old
 eval) in case a future, deeper-search retest disagrees.
 
+### Rejected: pawn-support bonus
+
+`Search.supportValue` (per friendly piece diagonally behind a pawn, i.e. a
+capture-safety proxy) and `Search.homeRowFullSupport` (whether an unjumpable
+back-row pawn counts as 2 supports) were tested and **rejected**. The natural
+variant was flat at small weights and harmful at 0.1/support (39.2% / 35.0%).
+The full-home variant looked promising (53.0% ± 3.5 vs no-support over 800
+games at 0.025) — but disentangling showed the gain was leaked back-row
+value, not support: at equal back-row totals the support term **lost** to a
+plain back-row raise (45.8% / 44.6%), and the raise itself was neutral vs
+the adopted 0.1 (50.8% / 51.7%). Emerging pattern across experiments: eval
+features earn their keep only by pricing what search *cannot* see within its
+horizon (back-row → kinging prevention, long-horizon: adopted) — features
+that proxy what quiescence already resolves exactly (capture safety) or what
+the search finds tactically (advancement → kinging) add bias without
+information. Both knobs stay, default off.
+
 ### Adopted: back-row pawn bonus (`Search.homeRowValue = 0.1`)
 
 The mirror image of the rejected advancement bonus — a pawn still guarding

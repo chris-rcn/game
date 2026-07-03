@@ -32,6 +32,12 @@ test('Search defaults to the learned king value of 1.4', function () {
     // Back-row bonus was tested and ADOPTED: 59.4% ± 3.4 vs 0 over 800
     // depth-4 games, positive at depth 5, jointly stable with kingValue=1.4.
     assert.strictEqual(s.homeRowValue, 0.1);
+    // Pawn-support bonus was tested and REJECTED (see README): the natural
+    // variant was flat-to-harmful, and the back-row-counts-as-two variant
+    // only looked good by leaking extra back-row value — at equal back-row
+    // totals the support term LOST (45.8/44.6% vs plain homeRow 0.15).
+    assert.strictEqual(s.supportValue, 0);
+    assert.strictEqual(s.homeRowFullSupport, false);
 });
 
 test('Random player: genMove returns a legal move, deterministically per seed', function () {

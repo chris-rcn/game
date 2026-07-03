@@ -83,8 +83,11 @@ CHF.checkers.players = function() {
         // 59.4% ± 3.4 over 800 games at depth 4, 53.3% at depth 5, with
         // kingValue=1.4 re-verified as stable alongside it.
         pub.homeRowValue = 0.1;
+        pub.supportValue = 0; // per friendly piece diagonally behind a pawn
+        pub.homeRowFullSupport = false; // back-row pawn counts as 2 supports
         pub.evalFunction = function(game) {
-            return game.materialEval(pub.kingValue, pub.rankValue, pub.homeRowValue);
+            return game.materialEval(pub.kingValue, pub.rankValue, pub.homeRowValue,
+                pub.supportValue, pub.homeRowFullSupport);
         };
         pub.evalDither = 0.001;
         pub.doQuiesce = true;
