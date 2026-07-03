@@ -16,8 +16,7 @@ Original site files (unmodified):
 | `players.js` | Players: random rollouts and a negamax search with alpha-beta, quiescence, iterative deepening |
 | `checkersUi.js` | Canvas UI (browser only) |
 | `board.jpg` | Board artwork |
-| `end8Forced`, `end8Unforced` | Endgame tablebases: regenerated **≤3-piece** tables in the v4 "CHFI" indexed format (651 KB each) |
-| `end8Forced.4p`, `end8Unforced.4p` | The full **≤4-piece** v4 tables (19.1 MB each) — validated but not served by default; rename over the canonical files to use them (see below) |
+| `end8Forced`, `end8Unforced` | Endgame tablebases: regenerated **≤4-piece** tables in the v4 "CHFI" indexed format (19.1 MB raw, ~4.8 MB gzipped on the wire — serve pre-compressed) |
 | `testdata/end8Forced.legacy`, `testdata/end8Unforced.padded` | The original site downloads, kept as fixtures for the legacy 9-byte and capacity-padded 8-byte reader paths |
 | `testdata/end8Forced.v3`, `testdata/end8Unforced.v3` | The original ≤3-piece values converted to v3, kept as the shipped-data oracle for generator/regression tests |
 | `tools/convert-tablebase.js` | Converts any supported hash-keyed tablebase format to v3 (verifies entry-for-entry before writing) |
@@ -47,10 +46,10 @@ Byte encoding: `255` = position absent/unreachable, `64` = explicit draw,
 otherwise `((v+1)<<6) | min(d,63)` for value `v` in {-1,+1} and distance
 `d`. Mid-jump states are not stored (the search recurses through
 continuations until the jump ends); elimination terminals are answered by
-the search's no-moves path. One byte per slot makes the shipped ≤3-piece
-table 651 KB/mode (vs 2.1 MB in v3) and a ≤4-piece table 19.1 MB/mode
-(vs ~98 MB for its 12.8M labeled positions at 8 bytes each in v3), and
-probing is O(1). `openTablebase`
+the search's no-moves path. One byte per slot makes the shipped ≤4-piece
+table 19.1 MB/mode — versus ~98 MB for its 12.8M labeled positions at 8
+bytes each in v3 — compressing to ~4.8 MB with gzip for transport (a ≤3
+build is 651 KB, vs 2.1 MB in v3), and probing is O(1). `openTablebase`
 sniffs the magic and returns a `TablebaseV4` (`probe(game)`) for CHFI
 files or a `ResultList2` (`getEntry(hash)`) otherwise; the search accepts
 either.
@@ -409,7 +408,7 @@ decides games the position is usually inside tablebase coverage, and
 short-range king traps are within the search horizon. The field stays,
 default 0.
 
-## Tablebase generation (the shipped tables are regenerated ≤3-piece v4)
+## Tablebase generation (the shipped tables are regenerated ≤4-piece v4)
 
 The original site tablebases covered only **≤3 pieces** (proven by
 enumeration accounting plus 575,360 3-kings-vs-1 probes: zero hits) and
@@ -420,8 +419,8 @@ retrograde analysis, using the engine itself for move generation (a shared
 arrays, and a compacting worklist):
 
 ```sh
-node tools/generate-tablebase.js 3 forced end8Forced      # ~3 s
-node tools/generate-tablebase.js 3 unforced end8Unforced
+node tools/generate-tablebase.js 4 forced end8Forced      # ~2.5-3 min
+node tools/generate-tablebase.js 4 unforced end8Unforced
 ```
 
 Proof of correctness before adopting: the generator reproduces the
@@ -433,31 +432,24 @@ distances, and the ~141k deep wins dropped by their draw-threshold-bounded
 generation). The 2-piece slice of that proof runs in the test suite on
 every `npm test`.
 
-The shipped ≤3-piece tables carry 411,906 decisive entries per mode versus
-the originals' 270,254/230,080 — the difference is exactly the #12 fix:
-the deep wins the originals called draws are decisive, draws are explicit
-and exact (clockless semantics: unlabeled after the retrograde fixpoint =
-provably drawn), and distances are canonical. 651 KB per mode. Swap
-regression check (depth 4, 200 games/mode, tablebase the only
-difference): ≤3 v4 vs the v3-era tables scored 51.3% forced / 51.0%
-unforced — flat as expected with matching coverage, no alarms.
+The shipped ≤4-piece solve: 15.3M enumerated states per mode, 12,817,672
+labeled base positions each (forced: 9,360,134 decisive + 3,457,538
+draws; unforced: 9,309,216 + 3,508,456), 110 retrograde rounds over
+52-61M edges, 19,062,288 bytes per file. Draws are explicit and exact
+(clockless semantics: unlabeled after the retrograde fixpoint = provably
+drawn), distances are canonical, and the deep wins the originals called
+draws are decisive. Serve the files pre-compressed: they gzip to ~4.8 MB
+each, which is the wire cost that made shipping 4-piece coverage
+worthwhile (the 19 MB shows up only as decompressed memory).
 
-### ≤4 pieces: built, validated, and deliberately not shipped
-
-The generator scales: the full ≤4-piece solve is 15.3M enumerated states
-per mode, 12,817,672 labeled base positions each (forced: 9,360,134
-decisive + 3,457,538 draws; unforced: 9,309,216 + 3,508,456), ~2.5-3
-minutes per mode (110 retrograde rounds over 52-61M edges), 19,062,288
-bytes as v4. Arena validation (depth 4, 400 games/mode, shared seeded
-openings, the only difference being which tablebase each side probes):
-≤4 scored **54.8% forced** (169-131-100) vs the v3-era ≤3 tables and was
-flat in unforced mode (48.9%, 135-144-121) where games rarely reach the
-covered region, with no alarms and no divergences. Verdict: **~+33 Elo in
-one mode is not worth 29× the bytes** on a web-served game, so the compact
-≤3 v4 files are canonical. The ≤4 tables are kept as `end8Forced.4p` /
-`end8Unforced.4p`; to play with them, copy each over its canonical name
-(the header carries maxPieces, so nothing else changes), or pass them to
-arena players via `searchOptions.tablebase`.
+Arena validation (depth 4, 400 games/mode, shared seeded openings, the
+only difference being which tablebase each side probes): ≤4 scored
+**54.8% forced** (169-131-100) vs the v3-era ≤3 data and was flat in
+unforced mode (48.9%, 135-144-121) where games rarely reach the covered
+region, with no alarms and no divergences. A compact ≤3 v4 build (651 KB,
+`node tools/generate-tablebase.js 3 ...`) remains available for
+size-constrained serving; it measured flat vs the v3-era tables (51.3% /
+51.0%, matching coverage) and carries the same #12 fixes.
 
 ## Test coverage summary
 

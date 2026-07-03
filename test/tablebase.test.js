@@ -564,19 +564,21 @@ test('TablebaseV4 probe round-trips through a synthetic table', function () {
     assert.throws(function () { new checkers.TablebaseV4(buffer.slice(0, 1000)); }, /slots|version|CHFI/);
 });
 
-test('canonical v4 tables cover <=3 pieces and agree with the v3-era data',
+test('canonical v4 tables cover 4 pieces and agree with the v3-era data on <=3',
     { skip: !fs.existsSync(forcedPath) && 'files not present' },
     function () {
         var tb = checkers.openTablebase(loadBuffer(forcedPath));
         if (!tb.probe) return; // canonical files not yet v4 in this checkout
         var stats = tb.getStats();
-        // The shipped coverage is deliberately <=3 pieces: the <=4 tables
-        // were built and arena-validated (54.8% forced) but cost 19 MB/mode
-        // for that gain, so the compact <=3 v4 files ship instead. 4-piece
-        // states must probe as absent, not garbage.
-        assert.strictEqual(stats.maxPieces, 3);
+        // The served tables are the full <=4-piece build (arena-validated
+        // at 54.8% forced vs <=3; ~4.8 MB/mode over the wire gzipped).
+        assert.strictEqual(stats.maxPieces, 4);
         assert.strictEqual(stats.forcedJumps, true);
+        // The 3-kings-vs-1 positions once proven ABSENT from the originals
+        // are covered and overwhelmingly won for the three-king side.
         var helpers = require('./helpers.js');
+        checkers.setForcedJumps(true);
+        var covered = 0, wins = 0, probes = 0;
         [[2, 6, 10], [40, 48, 24], [2, 4, 8]].forEach(function (kings) {
             [64, 66, 30].forEach(function (redAt) {
                 if (kings.indexOf(redAt) >= 0) return;
@@ -584,14 +586,16 @@ test('canonical v4 tables cover <=3 pieces and agree with the v3-era data',
                 kings.forEach(function (l) { pieces[l] = 'B'; });
                 pieces[redAt] = 'R';
                 var g = helpers.makeGame({ turn: 'black', pieces: pieces });
-                assert.strictEqual(tb.probe(g), null,
-                    "4-piece positions are outside shipped coverage");
+                probes++;
+                var e = tb.probe(g);
+                if (e) { covered++; if (e.v === 1) wins++; }
             });
         });
+        assert.strictEqual(covered, probes, "all 3Kv1K probes covered");
+        assert.ok(wins >= probes - 1, "3 kings vs 1 should be winning: " + wins + "/" + probes);
         // <=3-piece agreement with the v3-era converted table on sampled states.
         var v3 = new checkers.ResultList2(loadBuffer(v3ForcedPath));
         var common = require('../common.js');
-        checkers.setForcedJumps(true);
         var rand = new common.Random(77);
         var compared = 0, disagreements = 0;
         for (var g0 = 0; g0 < 80; g0++) {
@@ -612,57 +616,4 @@ test('canonical v4 tables cover <=3 pieces and agree with the v3-era data',
         }
         assert.ok(compared > 100, "sampled " + compared + " overlapping states");
         assert.strictEqual(disagreements, 0, "values must agree with the validated v3 data");
-    });
-
-var fourPieceForcedPath = path.join(__dirname, '..', 'end8Forced.4p');
-
-test('kept <=4-piece v4 table covers 3-kings-vs-1 and wins it',
-    { skip: !fs.existsSync(fourPieceForcedPath) && 'end8Forced.4p not present' },
-    function () {
-        // The <=4-piece build is not the served default (size), but it is
-        // kept in-repo; this pins that the positions once proven ABSENT from
-        // the originals are covered and overwhelmingly won for the 3-king
-        // side, and that it agrees with the canonical <=3 table everywhere
-        // they overlap.
-        var tb = checkers.openTablebase(loadBuffer(fourPieceForcedPath));
-        var stats = tb.getStats();
-        assert.strictEqual(stats.maxPieces, 4);
-        assert.strictEqual(stats.forcedJumps, true);
-        var helpers = require('./helpers.js');
-        checkers.setForcedJumps(true);
-        var covered = 0, wins = 0, probes = 0;
-        [[2, 6, 10], [40, 48, 24], [2, 4, 8]].forEach(function (kings) {
-            [64, 66, 30].forEach(function (redAt) {
-                if (kings.indexOf(redAt) >= 0) return;
-                var pieces = {};
-                kings.forEach(function (l) { pieces[l] = 'B'; });
-                pieces[redAt] = 'R';
-                var g = helpers.makeGame({ turn: 'black', pieces: pieces });
-                probes++;
-                var e = tb.probe(g);
-                if (e) { covered++; if (e.v === 1) wins++; }
-            });
-        });
-        assert.strictEqual(covered, probes, "all 3Kv1K probes covered");
-        assert.ok(wins >= probes - 1, "3 kings vs 1 should be winning: " + wins + "/" + probes);
-        var canon = checkers.openTablebase(loadBuffer(forcedPath));
-        if (!canon.probe) return;
-        var common = require('../common.js');
-        var rand = new common.Random(78);
-        var compared = 0;
-        for (var g0 = 0; g0 < 40; g0++) {
-            var game = new checkers.Game();
-            for (var step = 0; step < 400; step++) {
-                var mv = game.getMoves();
-                if (mv.length === 0) break;
-                game.makeMove(mv[rand.int(mv.length)], true);
-                if (game.getCheckerCount() <= 3 && game.getMoves().length > 0 &&
-                        !game.getJumpContinuationLoc()) {
-                    var a = canon.probe(game), b = tb.probe(game);
-                    compared++;
-                    assert.deepStrictEqual(b, a, "<=3 overlap must be identical");
-                }
-            }
-        }
-        assert.ok(compared > 50, "sampled " + compared + " overlapping states");
     });
