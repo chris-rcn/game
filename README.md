@@ -133,7 +133,15 @@ loading that silently became "off unless every consumer remembered."
 
 Arena search players share one mode-matching tablebase instance by default
 (`--no-tablebase` to disable) — earlier experiments played endgames blind,
-which is now fixed. Alongside this, tablebase hits in the search are decayed
+which is now fixed.
+
+Same principle applied to the repaired transposition table:
+`Search.useTranspositionTable` now defaults to **true** — measured
+value-neutral at fixed depth (49.2% vs plain over 60 games) and ~17% faster
+with even one side using it. Iterative deepening stays off by default: at
+fixed depth its re-search overhead is not recovered (measured slower with no
+strength gain); it belongs to time-budgeted play (`--max-seconds`), which
+enables it. Alongside this, tablebase hits in the search are decayed
 by their distance-to-result (`v × 0.99999^d`): without that gradient every
 winning move ties at the same value and the engine meanders inside won
 regions instead of converting. The distance fix measured +29 Elo in forced

@@ -68,13 +68,16 @@ test('new vs baseline shows zero rules divergences; forced mode still ties exact
     // The quiescence fix (BUGS.md #11) makes the versions differ in unforced
     // mode, but it provably cannot change forced-mode play (all-jump move
     // lists behave identically), and it never touches the rules, so the
-    // shadow replay must stay divergence-free in both modes. kingValue is
-    // pinned to the baseline's hardcoded 2 and the tablebase is disabled so
-    // the forced-mode bit-identity property stays meaningful despite the
-    // learned eval default and the tablebase distance-decay fix.
+    // shadow replay must stay divergence-free in both modes. The new side
+    // pins kingValue to the baseline's hardcoded 2, disables its (fixed) TT
+    // — the baseline's TT is the buggy one, so neither on-on nor on-off
+    // would be bit-identical — and the tablebase is off, so the forced-mode
+    // bit-identity property keeps testing rules identity despite all the
+    // learned/repaired defaults.
     var match = arena.playMatch({
         games: 4, depth: 2, seed: 5,
-        a: { engine: 'new', type: 'search', depth: 2, searchOptions: { kingValue: 2 } },
+        a: { engine: 'new', type: 'search', depth: 2,
+             searchOptions: { kingValue: 2, useTranspositionTable: false } },
         b: { engine: 'baseline', type: 'search', depth: 2 },
         forcedModes: [true, false],
         drawPlies: 40, maxPlies: 200, openingPlies: 6, tablebase: false

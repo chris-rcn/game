@@ -14,7 +14,7 @@ function newSearch(depth, opts) {
     var s = new players.Search(depth, opts.maxSeconds);
     s.evalDither = 0; // deterministic
     s.tablebase = null; // these tests pin raw search; auto-load has its own tests
-    if (opts.tt) s.useTranspositionTable = true;
+    s.useTranspositionTable = !!opts.tt; // raw-search pins; TT-on default asserted elsewhere
     if (opts.ab === false) s.doAlphaBeta = false;
     if (opts.id) s.useIterativeDeepening = true;
     return s;
@@ -42,6 +42,10 @@ test('Search defaults to the learned king value of 1.4', function () {
     // Tablebase defaults to auto (undefined): on wherever a table can be
     // resolved, off only when explicitly set to null.
     assert.strictEqual(s.tablebase, undefined);
+    // Transposition table on by default since the BUGS.md #4 fix:
+    // value-neutral at fixed depth (49.2% vs plain over 60 games) and
+    // ~17% faster with even one side using it.
+    assert.strictEqual(s.useTranspositionTable, true);
 });
 
 test('Random player: genMove returns a legal move, deterministically per seed', function () {

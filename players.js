@@ -118,7 +118,9 @@ CHF.checkers.players = function() {
         pub.doQuiesce = true;
         pub.doAlphaBeta = true;
         pub.evalCounter = 0;
-        pub.useTranspositionTable = false;
+        // On by default since the depth-comparison fix (BUGS.md #4):
+        // value-neutral at fixed depth and roughly halves leaf evaluations.
+        pub.useTranspositionTable = true;
         pub.typicalDepth = new common.IirFilter(1);
         pub.useIterativeDeepening = false;
         pub.useKillerMove = true;

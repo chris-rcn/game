@@ -121,9 +121,10 @@ was searched *deeper* than needed is legitimate but carries different depth-deca
 tie-break noise (see #7). The old bug produced errors thousands of times larger:
 on a pinned depth-9 position, pre-fix TT shifted the root value 0.2307 → 0.2000,
 while post-fix TT agrees with plain search exactly and evaluates ~45% fewer leaves.
-Mitigating factor for the original site: `useTranspositionTable` defaults to
-`false`, so the shipped UI never hit this. The bug remains in
-`baseline/players.js` for arena comparison.
+Mitigating factor for the original site: `useTranspositionTable` defaulted to
+`false`, so the shipped UI never hit this. Post-fix the default is **true** —
+value-neutral at fixed depth and roughly half the leaf evaluations. The bug
+remains in `baseline/players.js` for arena comparison.
 
 ### 5. `genMoveDetail` checks `.forced` on the wrong object — `players.js:238` — **FIXED in root copy**
 `negamax` flags the *Move* (`moves[0].forced = true; result.move = moves[0]`), but
