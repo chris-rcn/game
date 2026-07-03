@@ -863,9 +863,9 @@ CHF.checkers = function() {
             return (color & RED) ? rank(loc) : boardSizeM1-rank(loc);
         }
         pub.forwardRank = forwardRank;
-        function materialEval(kingWeight, rankWeight, homeRowBonus, supportBonus, homeRowFullSupport, kingCenterBonus, runawayBonus) {
+        function materialEval(kingWeight, rankWeight, homeRowBonus, supportBonus, homeRowFullSupport, kingCenterBonus, runawayBonus, runawayGraded) {
             var polarity = turn === BLACK ? 1 : -1;
-            return polarity * (2 * materialEvalBlack(kingWeight, rankWeight, homeRowBonus, supportBonus, homeRowFullSupport, kingCenterBonus, runawayBonus) - 1);
+            return polarity * (2 * materialEvalBlack(kingWeight, rankWeight, homeRowBonus, supportBonus, homeRowFullSupport, kingCenterBonus, runawayBonus, runawayGraded) - 1);
         }
         // Steps from the nearest board edge: 0 (on an edge) .. 3 (the four
         // center squares).  An edge king has at most half a center king's
@@ -918,7 +918,10 @@ CHF.checkers = function() {
         // king, pricing centralization; runawayBonus is awarded to each
         // runaway pawn (see pawnIsRunaway), pricing a coronation beyond the
         // horizon at a discount to the kinged difference (kingWeight - 1).
-        function materialEvalBlack(kingWeight, rankWeight, homeRowBonus, supportBonus, homeRowFullSupport, kingCenterBonus, runawayBonus) {
+        // runawayGraded scales that bonus by forwardRank/6 — a runaway one
+        // step from kinging collects the full bonus, one far from it almost
+        // nothing, matching how certain the coronation actually is.
+        function materialEvalBlack(kingWeight, rankWeight, homeRowBonus, supportBonus, homeRowFullSupport, kingCenterBonus, runawayBonus, runawayGraded) {
             kingWeight = kingWeight || 2;
             rankWeight = rankWeight || 0;
             homeRowBonus = homeRowBonus || 0;
@@ -946,7 +949,9 @@ CHF.checkers = function() {
                         if ((squares[loc + boardSize] & BLACK)) black += supportBonus;
                         if ((squares[loc + maxDiagonalOffset] & BLACK)) black += supportBonus;
                     }
-                    if (runawayBonus && pawnIsRunaway(loc, BLACK)) black += runawayBonus;
+                    if (runawayBonus && pawnIsRunaway(loc, BLACK)) {
+                        black += runawayGraded ? runawayBonus * fr / 6 : runawayBonus;
+                    }
                 }
             }
             checkersColor = checkers[RED];
@@ -966,7 +971,9 @@ CHF.checkers = function() {
                         if ((squares[loc - boardSize] & RED)) red += supportBonus;
                         if ((squares[loc - maxDiagonalOffset] & RED)) red += supportBonus;
                     }
-                    if (runawayBonus && pawnIsRunaway(loc, RED)) red += runawayBonus;
+                    if (runawayBonus && pawnIsRunaway(loc, RED)) {
+                        red += runawayGraded ? runawayBonus * fr / 6 : runawayBonus;
+                    }
                 }
             }
             if (redPawns > 0) black += homeRowBonus * blackHome;

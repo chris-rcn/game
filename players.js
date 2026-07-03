@@ -128,10 +128,11 @@ CHF.checkers.players = function() {
         // 0.2 confirmed at 52.5%/53.3% ± 4.9 over 800 games at depth 4,
         // with kingValue=1.4 re-verified as stable alongside it.
         pub.runawayValue = 0.2;
+        pub.runawayGraded = false; // scale runawayValue by forwardRank/6
         pub.evalFunction = function(game) {
             return game.materialEval(pub.kingValue, pub.rankValue, pub.homeRowValue,
                 pub.supportValue, pub.homeRowFullSupport,
-                pub.kingCenterValue, pub.runawayValue);
+                pub.kingCenterValue, pub.runawayValue, pub.runawayGraded);
         };
         pub.evalDither = 0.001;
         // Extension budget beyond maxDepth while a capture is pending (or

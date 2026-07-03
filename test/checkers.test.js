@@ -403,6 +403,13 @@ test('materialEvalBlack accepts a runaway (unblocked) pawn bonus', function () {
     // Defaults off: the 7-arg call with zeros is exactly the base eval.
     assert.strictEqual(clear.materialEvalBlack(2, 0, 0, 0, false, 0, 0),
         clear.materialEvalBlack(2));
+    // Graded variant scales by forwardRank/6: the black pawn on 40 is on
+    // forward rank 3, so it collects half the bonus (0.3 * 3/6 = 0.15).
+    assert.ok(Math.abs(clear.materialEvalBlack(2, 0, 0, 0, false, 0, 0.3, true) - 1.15 / 3.15) < 1e-12);
+    // A blocked pawn collects nothing in either variant.
+    var blocked2 = h.makeGame({ turn: 'black', pieces: { 40: 'b', 22: 'R' } });
+    assert.strictEqual(blocked2.materialEvalBlack(2, 0, 0, 0, false, 0, 0.3, true),
+        blocked2.materialEvalBlack(2));
 });
 
 test('forwardRank counts from each side\'s home row', function () {
