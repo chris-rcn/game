@@ -69,6 +69,11 @@ CHF.checkers = function() {
         return indexDirection[index];
     };
 
+    // Initialized before the first Game construction below: the incremental
+    // board hash XORs zobrist entries from addChecker onward.
+    var zobristData0 = genZobristData(123);
+    var zobristData1 = genZobristData(345);
+
     var squareIndexLookups = function () {
         var squares = new Game().getState().squares;
         var squareToIndex = [];
@@ -416,9 +421,6 @@ CHF.checkers = function() {
         return { turn: t, board: b, sinceProgress: sp, jumpContinuation: jc };
     }
 
-    var zobristData0 = genZobristData(123);
-    var zobristData1 = genZobristData(345);
-
     function Move(from, to) {
         this.from = from;
         this.to = to;
@@ -453,6 +455,7 @@ CHF.checkers = function() {
                 movesSinceProgress = s.movesSinceProgress;
                 legalMoves = s.legalMoves;
                 checkers = s.checkers;
+                recomputeBoardHash();
                 //checkCheckers();
             }
         }
@@ -481,6 +484,8 @@ CHF.checkers = function() {
             checkers = [];
             checkers[BLACK] = [];
             checkers[RED] = [];
+            boardHash0 = 0; // placeRow -> addChecker accumulates from here
+            boardHash1 = 0;
             var offset = 1;
             var r, row = 0;
             for (r=0; r<halfBoardSize-1; r++) {
@@ -552,35 +557,42 @@ CHF.checkers = function() {
         function printBoard() {
             console.log(toString());
         }
-        function hash32(z, includeMovesSinceProgress) {
-            // z = { turn, board, sinceProgress, jumpContinuation }
-            var h = z.turn[turn] ^ z.jumpContinuation[jumpContinuationLoc];
+        // The board component of the Zobrist hash (XOR of board[loc][piece]
+        // over occupied squares) is maintained INCREMENTALLY by the three
+        // mutation helpers plus the two crowning sites, so hashing is O(1)
+        // instead of O(pieces) — the search reads the hash at every node
+        // (transposition table, repetition check, tablebase probes). The
+        // turn / jump-continuation / progress-clock terms are folded in at
+        // read time, so turn flips and clock ticks need no tracking.
+        // (Declared without initializers: the constructor runs reset() or
+        // setState() before this line's position in the body, and both set
+        // the hash; a runtime initializer here would stomp it.)
+        var boardHash0, boardHash1;
+        function xorPiece(loc, piece) {
+            boardHash0 ^= zobristData0.board[loc][piece];
+            boardHash1 ^= zobristData1.board[loc][piece];
+        }
+        function recomputeBoardHash() {
+            boardHash0 = 0;
+            boardHash1 = 0;
+            eachPiece(xorPiece);
+        }
+        function hash32(z, boardHash, includeMovesSinceProgress) {
+            var h = z.turn[turn] ^ z.jumpContinuation[jumpContinuationLoc] ^ boardHash;
             if (includeMovesSinceProgress) {
                 h = h ^ z.sinceProgress[Math.min(movesSinceProgress, drawThreshold)];
-            }
-            var i, loc, checkersColor;
-            checkersColor = checkers[BLACK];
-            var b = z.board;
-            for (i=0; i<checkersColor.length; i++) {
-                loc = checkersColor[i];
-                h = h ^ b[loc][squares[loc]];
-            }
-            checkersColor = checkers[RED];
-            for (i=0; i<checkersColor.length; i++) {
-                loc = checkersColor[i];
-                h = h ^ b[loc][squares[loc]];
             }
             return h;
         }
         function hash(includeMovesSinceProgress) {  // TODO: deprecate
             return {
-                h0: hash32(zobristData0, includeMovesSinceProgress),
-                h1: hash32(zobristData1, includeMovesSinceProgress)};
+                h0: hash32(zobristData0, boardHash0, includeMovesSinceProgress),
+                h1: hash32(zobristData1, boardHash1, includeMovesSinceProgress)};
         }
         function hashBase() {
             return {
-                h0: hash32(zobristData0, false),
-                h1: hash32(zobristData1, false)};
+                h0: hash32(zobristData0, boardHash0, false),
+                h1: hash32(zobristData1, boardHash1, false)};
         }
         pub.hashBase = hashBase;
         function hashMovesSinceProgress() {
@@ -624,6 +636,7 @@ CHF.checkers = function() {
             squares[loc] = piece;
             if (piece !== OPEN) {
                 checkers[piece & PAWN].push(loc);
+                xorPiece(loc, piece);
             }
         }
         function removeChecker(loc) {
@@ -631,6 +644,7 @@ CHF.checkers = function() {
             var checkersColor = checkers[color];
             var pos = checkersColor.indexOf(loc);
             assert(pos >= 0);
+            xorPiece(loc, squares[loc]);
             squares[loc] = OPEN;
             var last = checkersColor.pop();
             if (pos < checkersColor.length) {
@@ -643,6 +657,8 @@ CHF.checkers = function() {
             var checkersColor = checkers[color];
             var pos = checkersColor.indexOf(from);
             assert(pos >= 0);
+            xorPiece(from, squares[from]);
+            xorPiece(to, squares[from]);
             squares[to] = squares[from];
             squares[from] = OPEN;
             checkersColor[pos] = to;
@@ -681,7 +697,9 @@ CHF.checkers = function() {
                     movesSinceProgress = 0;
                 }
                 if (!king && endCoord.row === kingRow) {
+                    xorPiece(to, squares[to]); // crown: pawn out, king in
                     squares[to] |= KING;
+                    xorPiece(to, squares[to]);
                     becameKing = true;
                     turnIsEnding = true;
                 }
@@ -692,7 +710,9 @@ CHF.checkers = function() {
                     jumpContinuationLoc = initialJumpContinuationLoc;
                     legalMoves = initialLegalMoves;
                     if (becameKing) {
+                        xorPiece(from, squares[from]); // uncrown
                         squares[from] = turn;
+                        xorPiece(from, turn);
                     }
                 };
                 turnIsEnding = true;
@@ -708,7 +728,9 @@ CHF.checkers = function() {
                 jumpContinuationLoc = to;
                 movesSinceProgress = 0;
                 if (!king && endCoord.row === kingRow) {
+                    xorPiece(to, squares[to]); // crown: pawn out, king in
                     squares[to] |= KING;
+                    xorPiece(to, squares[to]);
                     becameKing = true;
                     turnIsEnding = true;
                 }
@@ -720,7 +742,9 @@ CHF.checkers = function() {
                     jumpContinuationLoc = initialJumpContinuationLoc;
                     legalMoves = initialLegalMoves;
                     if (becameKing) {
+                        xorPiece(from, squares[from]); // uncrown
                         squares[from] = turn;
+                        xorPiece(from, turn);
                     }
                 };
             } else {

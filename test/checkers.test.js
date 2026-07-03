@@ -502,3 +502,30 @@ test('there is deliberately no draw clock: play continues past drawThreshold (BU
         "the game must keep going past the threshold; only external harnesses adjudicate draws");
     assert.ok(g.getMovesSinceProgress() > checkers.getDrawThreshold());
 });
+
+test('incremental board hash always equals a from-scratch recompute', function () {
+    // The board hash is maintained incrementally through every mutation
+    // path (add/remove/move, crowning, undo's uncrowning); a fresh Game
+    // built from getState() recomputes it from scratch, giving an exact
+    // oracle. Random play exercises slides, jumps, multi-jumps and
+    // crowning in both rules modes.
+    [true, false].forEach(function (forced) {
+        checkers.setForcedJumps(forced);
+        var rand = new (require('../common.js').Random)(99);
+        for (var g0 = 0; g0 < 6; g0++) {
+            var g = new checkers.Game();
+            for (var step = 0; step < 250; step++) {
+                var moves = g.getMoves();
+                if (moves.length === 0) break;
+                var undo = g.makeMove(moves[rand.int(moves.length)], true);
+                assert.deepStrictEqual(g.hash(true), new checkers.Game(g.getState()).hash(true),
+                    "hash drift in forced=" + forced + " game " + g0 + " step " + step);
+                if (rand.int(4) === 0) {
+                    undo(); // exercise the undo paths, including uncrowning
+                    assert.deepStrictEqual(g.hash(true), new checkers.Game(g.getState()).hash(true));
+                }
+            }
+        }
+    });
+    checkers.setForcedJumps(true);
+});
