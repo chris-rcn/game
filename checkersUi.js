@@ -20,10 +20,15 @@ CHF.checkers.ui = function() {
     var showAnimations = true;
     var animatingMove;
     var animatingProgress;
+    // Restored to the original shipped behavior: the ~4.5ms tick is
+    // browser-clamped to ~4ms, giving an effectively smooth (~60fps+)
+    // animation over ~300ms. A literal 20fps reading of these constants
+    // was tried during cleanup ("bug" #10) and looked visibly chunky —
+    // the fast timer was intent, not accident; only the naming misleads.
     var animationFramesPerSec = 20;
     var animationPeriodMs = 300;
-    var animationFrames = animationPeriodMs * animationFramesPerSec / 1000;
-    var animationFramePeriodMs = 1000 / animationFramesPerSec;
+    var animationFrames = 1000 * animationFramesPerSec / animationPeriodMs;
+    var animationFramePeriodMs = animationPeriodMs / animationFrames;
     var animationVelocity = 1 / animationFrames;
     var randPlayer = new players.Random();
     var player = new players.Search(1);

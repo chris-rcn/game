@@ -214,16 +214,17 @@ coordinated change: a UI end-turn gesture (e.g. clicking the jumping piece), an
 explicit end-turn action in the engine's mid-chain move set, search support for
 the stop option, and regeneration of any unforced tablebase.
 
-### 10. UI animation timer runs ~11x too fast — `checkersUi.js:25` — **FIXED in root copy**
+### 10. ~~UI animation timer runs ~11x too fast~~ RECLASSIFIED: misleading names, correct behavior — `checkersUi.js:25`
 ```js
 var animationFrames = 1000 * animationFramesPerSec / animationPeriodMs; // 66.7
 var animationFramePeriodMs = animationPeriodMs / animationFrames;       // 4.5ms
 ```
-For 20 fps over a 300 ms animation, that should be `6` frames at `50` ms. The two
-errors cancelled so the animation still lasted 300 ms, but `setInterval(animate, 4.5)`
-redrew at ~220 Hz instead of 20 Hz, burning CPU for nothing. Fixed during the
-cleanup pass: frames = period × fps / 1000, frame period = 1000 / fps; the
-animation duration is unchanged.
+Read literally ("20 fps"), this looked like two cancelling unit errors, and the
+cleanup pass "fixed" it to 6 frames at 50 ms. That fix was a REGRESSION: 20 fps
+is visibly chunky, and the original ~4.5 ms tick (browser-clamped to ~4 ms) is
+what made the animation smooth. The original was restored; the real defect is
+only that `animationFramesPerSec` doesn't mean what it says. The CPU cost is
+~300 ms of redraws per move — negligible.
 
 ### 11. Quiescence search never runs in unforced mode — `players.js:142` — **FIXED in root copy**
 The "keep searching, this position is noisy" test was
