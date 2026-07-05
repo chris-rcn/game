@@ -31,7 +31,7 @@
         <div id="divMessage" style="text-align: center; height:20px;"></div>
         <label><input type="checkbox" onclick="CHF.checkers.ui.setForcedJumps(this.checked)" checked>Forced jumps</label><br /><br />
         <span id="spanLevel" style="margin-right:5px;"></span>
-        <input type="button" value="Reset level to one" onclick="CHF.checkers.ui.resetLevel()" style="width:40%;"><br /><br />
+        <input type="button" id="btnResetLevel" value="Reset to level 1" onclick="CHF.checkers.ui.resetLevel()" style="width:40%; display:none;"><br /><br />
         <img id="imgBoard" src="board.jpg" hidden />
         <canvas id="cnvBoard" width="350" height="350"></canvas>
         <div style="margin-top:15px; margin-bottom:15px;">

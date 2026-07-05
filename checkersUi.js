@@ -331,6 +331,10 @@ CHF.checkers.ui = function() {
         player.maxDepth = 32;
         player.nodeLimit = 20 * Math.pow(2, value - 1);
         level.innerHTML = "Level: " + value;
+        var resetButton = document.getElementById("btnResetLevel");
+        if (resetButton) {
+            resetButton.style.display = value > 1 ? "inline-block" : "none";
+        }
         try {
             localStorage.setItem("level", value);
         } catch (e) {
