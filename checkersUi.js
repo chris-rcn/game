@@ -35,6 +35,7 @@ CHF.checkers.ui = function() {
     var computerPlaysBlack = false;
     var renderCoordinates = false;
     var doComputerMoveTimer;
+    var currentLevel = 1; // levels are budgets now, not maxDepth (fixed cap 32)
 
     function devMode() {
         loadTablebase("pub", true);
@@ -336,6 +337,7 @@ CHF.checkers.ui = function() {
         // free material), halving per level until it meets the engine's
         // tuned 0.003 around level 8. Budgets above are untouched.
         player.evalDither = Math.max(0.003, 0.4 / Math.pow(2, value - 1));
+        currentLevel = value;
         level.innerHTML = "Level: " + value;
         var resetButton = document.getElementById("btnResetLevel");
         if (resetButton) {
@@ -368,7 +370,7 @@ CHF.checkers.ui = function() {
                 setMessage("I win  :)");
             } else {
                 setMessage("You win!");
-                setLevel(player.maxDepth + 1);
+                setLevel(currentLevel + 1);
             }
         } else if (game.getJumpContinuationLoc()) {
             if (checkers.getForcedJumps()) {
