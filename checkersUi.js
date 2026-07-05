@@ -320,7 +320,10 @@ CHF.checkers.ui = function() {
         if (isNaN(value)) {
             value = 1;
         }
-        value = Math.max(1, value);
+        // Clamp: floor 1; ceiling 16 keeps the budget (20 * 2^15 = 655k
+        // nodes) at seconds-per-move on any device, and repairs any stored
+        // level polluted by the fixed maxDepth+1 advancement bug.
+        value = Math.max(1, Math.min(16, value));
         // Levels meter thinking EFFORT, not lookahead: each level doubles a
         // node budget anchored at 20 nodes — the measured average cost of a
         // depth-1 search including its quiescence bonus (12.4 nodes/move),
