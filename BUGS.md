@@ -222,9 +222,11 @@ var animationFramePeriodMs = animationPeriodMs / animationFrames;       // 4.5ms
 Read literally ("20 fps"), this looked like two cancelling unit errors, and the
 cleanup pass "fixed" it to 6 frames at 50 ms. That fix was a REGRESSION: 20 fps
 is visibly chunky, and the original ~4.5 ms tick (browser-clamped to ~4 ms) is
-what made the animation smooth. The original was restored; the real defect is
-only that `animationFramesPerSec` doesn't mean what it says. The CPU cost is
-~300 ms of redraws per move — negligible.
+what made the animation smooth-ish. Restoring the original then exposed the
+underlying defect both variants shared: a timer racing the display refresh
+aliases (uneven visible steps) and finishes early under timer clamping.
+Final resolution: time-based progress on `requestAnimationFrame` — exactly
+300 ms by construction, vsync-aligned, no timer at all.
 
 ### 11. Quiescence search never runs in unforced mode — `players.js:142` — **FIXED in root copy**
 The "keep searching, this position is noisy" test was

@@ -20,16 +20,14 @@ CHF.checkers.ui = function() {
     var showAnimations = true;
     var animatingMove;
     var animatingProgress;
-    // Restored to the original shipped behavior: the ~4.5ms tick is
-    // browser-clamped to ~4ms, giving an effectively smooth (~60fps+)
-    // animation over ~300ms. A literal 20fps reading of these constants
-    // was tried during cleanup ("bug" #10) and looked visibly chunky —
-    // the fast timer was intent, not accident; only the naming misleads.
-    var animationFramesPerSec = 20;
+    // Time-based animation on requestAnimationFrame: progress is computed
+    // from elapsed wall time, so the slide lasts exactly animationPeriodMs
+    // and every displayed frame advances proportionally (vsync-aligned).
+    // Both timer-driven variants misbehaved: a fast setInterval aliased
+    // against the display refresh (uneven steps, finished early under
+    // timer clamping) and a literal-20fps reading was visibly chunky.
     var animationPeriodMs = 300;
-    var animationFrames = 1000 * animationFramesPerSec / animationPeriodMs;
-    var animationFramePeriodMs = animationPeriodMs / animationFrames;
-    var animationVelocity = 1 / animationFrames;
+    var animatingStartMs = null;
     var randPlayer = new players.Random();
     var player = new players.Search(1);
     var ignoreButtons = false;
@@ -149,25 +147,31 @@ CHF.checkers.ui = function() {
         }
         //log(game.hash());
     }
-    function animate() {
-        if (animatingMove) {
-            animatingProgress += animationVelocity;
-            //log("animatingProgress={}", animatingProgress);
-            isDirty = true;
-            if (animatingProgress >= 1) {
-                var move = animatingMove;
-                animatingMove = null;
-                common.assert(makeMove(move));
-            }
-            drawBoard(game);
-        } else {
+    function animate(nowMs) {
+        if (!animatingMove) {
             animatingProgress = null;
+            return;
         }
+        if (animatingStartMs === null) {
+            animatingStartMs = nowMs;
+        }
+        animatingProgress = (nowMs - animatingStartMs) / animationPeriodMs;
+        isDirty = true;
+        if (animatingProgress >= 1) {
+            var move = animatingMove;
+            animatingMove = null;
+            common.assert(makeMove(move)); // may start the next segment's animation
+        } else {
+            window.requestAnimationFrame(animate);
+        }
+        drawBoard(game);
     }
     function animateMove(move) {
         animatingProgress = 0;
+        animatingStartMs = null;
         animatingMove = move;
         ignoreButtons = true;
+        window.requestAnimationFrame(animate);
     }
     function tapOrClick(event) {
         if (ignoreButtons) {
@@ -207,7 +211,6 @@ CHF.checkers.ui = function() {
         board.addEventListener("mousedown", tapOrClick, false);
         board.addEventListener("touchstart", tapOrClick, false);
         newGame();
-        setInterval(animate, animationFramePeriodMs);
     }
     function newGame() {
         animatingMove = null;
