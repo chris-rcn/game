@@ -76,6 +76,7 @@ CHF.checkers.ui = function() {
         }
     }
     function drawBoard(game) {
+        syncBackingStore();
         if (!isDirty) return;
         isDirty = false;
         var pad = 2;
@@ -200,19 +201,24 @@ CHF.checkers.ui = function() {
         event.preventDefault();
         return false;
     }
-    // Match the canvas backing store to its CSS size times the device
-    // pixel ratio, so the board is crisp on high-DPI screens and resizes
-    // with the viewport (the stylesheet makes the canvas fill its column).
-    function resizeBoard() {
+    // Keep the canvas backing store matched to its CSS size times the
+    // device pixel ratio — crisp on high-DPI screens, resizes with the
+    // viewport. Checked on EVERY draw, not just window resize events:
+    // mobile layout settles after init (browser chrome, viewport units),
+    // and a stale backing store crops the right/bottom board edge.
+    function syncBackingStore() {
         var cssSize = board.clientWidth || 350;
         var dpr = window.devicePixelRatio || 1;
         var px = Math.round(cssSize * dpr);
         if (board.width !== px) {
             board.width = px;
             board.height = px;
+            boardCtx.setTransform(dpr, 0, 0, dpr, 0, 0);
+            isDirty = true;
         }
-        boardCtx.setTransform(dpr, 0, 0, dpr, 0, 0);
-        isDirty = true;
+    }
+    function resizeBoard() {
+        syncBackingStore();
         if (game) {
             drawBoard(game);
         }
