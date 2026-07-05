@@ -330,6 +330,12 @@ CHF.checkers.ui = function() {
         // so tablebase-covered positions cannot deepen without bound.
         player.maxDepth = 32;
         player.nodeLimit = 20 * Math.pow(2, value - 1);
+        // Easy-level dither schedule: large eval noise at level 1 makes the
+        // engine hang pieces like a novice (measured -490 Elo vs the tuned
+        // level 1, yet still 97-100% vs a random mover — it keeps taking
+        // free material), halving per level until it meets the engine's
+        // tuned 0.003 around level 8. Budgets above are untouched.
+        player.evalDither = Math.max(0.003, 0.4 / Math.pow(2, value - 1));
         level.innerHTML = "Level: " + value;
         var resetButton = document.getElementById("btnResetLevel");
         if (resetButton) {
