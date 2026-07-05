@@ -79,12 +79,12 @@ CHF.checkers.ui = function() {
         if (!isDirty) return;
         isDirty = false;
         var pad = 2;
-        var size = board.clientHeight - 2 * pad;
+        var size = board.clientWidth - 2 * pad;
         var tileSize = size / boardSize;
         var row, column;
         var x, y;
         if (boardSize === 8) {
-            boardCtx.drawImage(boardImage, 0, 0, board.clientHeight, board.clientHeight);
+            boardCtx.drawImage(boardImage, 0, 0, board.clientWidth, board.clientWidth);
         } else {
             for (row=0; row<boardSize; row++) {
                 for (column=0; column<boardSize; column++) {
@@ -177,12 +177,11 @@ CHF.checkers.ui = function() {
         if (ignoreButtons) {
             return;
         }
-        var size = board.clientHeight;
-        var tileSize = size / boardSize;
-        var mouseX = event.pageX - board.offsetLeft;
-        var mouseY = event.pageY - board.offsetTop;
-        var row = Math.floor(mouseY / tileSize);
-        var column = Math.floor(mouseX / tileSize);
+        var rect = board.getBoundingClientRect();
+        var tileSize = rect.width / boardSize;
+        var point = event.touches ? event.touches[0] : event;
+        var row = Math.floor((point.clientY - rect.top) / tileSize);
+        var column = Math.floor((point.clientX - rect.left) / tileSize);
         var loc = coordToLoc(row, column);
         var tileColor = (row + column) % 2;
         if (tileColor === 1) {
@@ -201,6 +200,23 @@ CHF.checkers.ui = function() {
         event.preventDefault();
         return false;
     }
+    // Match the canvas backing store to its CSS size times the device
+    // pixel ratio, so the board is crisp on high-DPI screens and resizes
+    // with the viewport (the stylesheet makes the canvas fill its column).
+    function resizeBoard() {
+        var cssSize = board.clientWidth || 350;
+        var dpr = window.devicePixelRatio || 1;
+        var px = Math.round(cssSize * dpr);
+        if (board.width !== px) {
+            board.width = px;
+            board.height = px;
+        }
+        boardCtx.setTransform(dpr, 0, 0, dpr, 0, 0);
+        isDirty = true;
+        if (game) {
+            drawBoard(game);
+        }
+    }
     function init(bd, bdImg, msg, lvl) {
         board = bd;
         boardImage = bdImg;
@@ -210,6 +226,8 @@ CHF.checkers.ui = function() {
         boardCtx = board.getContext("2d");
         board.addEventListener("mousedown", tapOrClick, false);
         board.addEventListener("touchstart", tapOrClick, false);
+        window.addEventListener("resize", resizeBoard, false);
+        resizeBoard();
         newGame();
     }
     function newGame() {
