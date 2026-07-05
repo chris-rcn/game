@@ -249,8 +249,16 @@ guess of 3× additionally refused the second iteration even at budget
 40 — both measured as a dead rung (+20/+3 Elo, then +26/+35). With the
 20 anchor and the initial guess lowered to the clamp floor (2×, near
 the measured ~1.4× depth-1→2 increment), L1→L2 measures **+114/+117**.
-**Level 1 still plays essentially the old depth-1 level**, and each
-level doubles the budget from there. Budgets are device-independent and
+Each level doubles the budget from there.
+
+Layered on top, an **easy-level dither schedule**:
+`evalDither = max(0.003, 0.4 × 2^−(level−1))`. Measured at the level-1
+budget (120/mode): dither 0.1 → −90 Elo vs the tuned level 1, 0.2 →
+−210, 0.4 → **−490**, while even 0.4 still beats a random mover
+97–100% — the noise makes it hang pieces like a novice without making
+it play un-checkers-like (forced jumps and the budget search keep it
+taking free material). The noise halves per level and meets the
+engine's tuned 0.003 near level 8, so upper levels are unchanged. Budgets are device-independent and
 deterministic — unlike time limits, the same level plays identically on
 any hardware — and they self-allocate: the same spend searches deeper
 where subtrees are cheap (forced sequences, tablebase-covered regions)
