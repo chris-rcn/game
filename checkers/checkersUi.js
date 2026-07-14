@@ -37,6 +37,40 @@ CHF.checkers.ui = function() {
     var doComputerMoveTimer;
     var currentLevel = 1; // levels are budgets now, not maxDepth (fixed cap 32)
 
+    // Versioned, namespaced persistence: one JSON blob under "checkers.v1"
+    // holding level and rules mode. A future schema bumps the key (v2) and
+    // simply orphans old data — no migration. The pre-versioning bare
+    // "level" key is ignored and cleaned up (deliberate compatibility
+    // break).
+    var STORAGE_KEY = "checkers.v1";
+    function loadStore() {
+        var store = { level: 1, forcedJumps: true };
+        try {
+            localStorage.removeItem("level");
+            var raw = localStorage.getItem(STORAGE_KEY);
+            if (raw) {
+                var parsed = JSON.parse(raw);
+                if (typeof parsed.level === "number") {
+                    store.level = parsed.level;
+                }
+                if (typeof parsed.forcedJumps === "boolean") {
+                    store.forcedJumps = parsed.forcedJumps;
+                }
+            }
+        } catch (e) {
+        }
+        return store;
+    }
+    function saveStore() {
+        try {
+            localStorage.setItem(STORAGE_KEY, JSON.stringify({
+                level: currentLevel,
+                forcedJumps: checkers.getForcedJumps()
+            }));
+        } catch (e) {
+        }
+    }
+
     function devMode() {
         loadTablebase("pub", true);
         loadTablebase("pub", false);
@@ -229,7 +263,14 @@ CHF.checkers.ui = function() {
         boardImage = bdImg;
         message = msg;
         level = lvl;
-        setLevel(parseInt(localStorage.getItem("level"), 10));
+        var store = loadStore();
+        checkers.setForcedJumps(store.forcedJumps);
+        player.tablebase = tablebases[store.forcedJumps]; // async load installs later if not yet fetched
+        var forcedCheckbox = document.getElementById("chkForced");
+        if (forcedCheckbox) {
+            forcedCheckbox.checked = store.forcedJumps;
+        }
+        setLevel(store.level);
         boardCtx = board.getContext("2d");
         board.addEventListener("mousedown", tapOrClick, false);
         board.addEventListener("touchstart", tapOrClick, false);
@@ -346,10 +387,7 @@ CHF.checkers.ui = function() {
         if (resetButton) {
             resetButton.style.display = value > 1 ? "inline-block" : "none";
         }
-        try {
-            localStorage.setItem("level", value);
-        } catch (e) {
-        }
+        saveStore();
     }
     // A provable draw indication: the tablebase's explicit draws are
     // theoretical facts (drawn under best play by both sides), so the
@@ -446,6 +484,7 @@ CHF.checkers.ui = function() {
     function setForcedJumps(value) {
         checkers.setForcedJumps(value);
         player.tablebase = tablebases[value];
+        saveStore();
         newGame();
     }
     pub.setForcedJumps = setForcedJumps;
