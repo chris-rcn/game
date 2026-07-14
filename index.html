@@ -1,45 +1,11 @@
 <!DOCTYPE html>
 <html>
-
-<head lang="en">
+<head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1, user-scalable=no">
+    <meta http-equiv="refresh" content="0; url=checkers/">
     <title>Checkers</title>
-    <style>
-        body { margin: 0; padding: 12px; display: flex; justify-content: center;
-               font-family: Verdana, sans-serif; }
-        #game { width: min(92vmin, 480px); }
-        #cnvBoard { width: 100%; height: auto; display: block; touch-action: none; }
-        input[type="button"] { padding: 8px 4px; font-size: 14px; }
-        label { font-size: 14px; }
-    </style>
-    <script type="text/javascript" src="common.js" ></script>
-    <script type="text/javascript" src="checkers.js" ></script>
-    <script type="text/javascript" src="players.js" ></script>
-    <script type="text/javascript" src="checkersUi.js" ></script>
 </head>
-
-<body onload="CHF.checkers.ui.init(
-    document.getElementById('cnvBoard'),
-    document.getElementById('imgBoard'),
-    document.getElementById('divMessage'),
-    document.getElementById('spanLevel'));
-">
-
-    <div id="game">
-        <div style="text-align: center; color: #666; font-size: 13px;">Click a piece and its destination.</div>
-        <hr style="border: none; border-top: 1px solid #ddd; margin: 8px 0;">
-        <div id="divMessage" style="text-align: center; height:20px;"></div>
-        <label><input type="checkbox" onclick="CHF.checkers.ui.setForcedJumps(this.checked)" checked>Forced jumps</label><br /><br />
-        <span id="spanLevel" style="margin-right:5px;"></span>
-        <input type="button" id="btnResetLevel" value="Reset to level 1" onclick="CHF.checkers.ui.resetLevel()" style="width:40%; display:none;"><br /><br />
-        <img id="imgBoard" src="board.jpg" hidden />
-        <canvas id="cnvBoard" width="350" height="350"></canvas>
-        <div style="margin-top:15px; margin-bottom:15px;">
-            <input type="button" value="New game" onclick="CHF.checkers.ui.newGame()" style="width:40%;">
-        </div>
-    </div>
-
+<body>
+    <a href="checkers/">Checkers</a>
 </body>
-
 </html>
